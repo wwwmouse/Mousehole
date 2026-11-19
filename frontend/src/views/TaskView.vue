@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
+import ChatPanel from '@/components/ChatPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import FilePickerModal from '@/components/FilePickerModal.vue'
@@ -13,6 +14,7 @@ import {
   getProject,
   getTask,
   getTaskFiles,
+  listModels,
   listProjects,
   removeTaskFileOverride,
   updateTask,
@@ -20,11 +22,13 @@ import {
 } from '@/api/endpoints'
 import type {
   FileItem,
+  ModelInfo,
   Project,
   Task,
   TaskAvailableFile,
   TaskFileContext,
   TaskStatus,
+  TaskUsage,
 } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage, isNotFound } from '@/utils/errors'
@@ -57,6 +61,13 @@ const statusUpdating = ref(false)
 const pickerOpen = ref(false)
 const fileActionBusy = ref<string | null>(null)
 const addingFiles = ref(false)
+
+const models = ref<ModelInfo[]>([])
+const modelSaving = ref(false)
+const selectedModel = ref('')
+const temperatureDraft = ref('')
+const maxTokensDraft = ref('')
+const paramsSaving = ref(false)
 
 const statusOptions: { value: TaskStatus; label: string }[] = [
   { value: 'active', label: '进行中' },
@@ -94,6 +105,45 @@ const pickerExcludedIds = computed<string[]>(() => [
   ...(fileContext.value?.excluded ?? []).map((file) => file.id),
 ])
 
+type FileRowSource = 'project_inherited' | 'task_added' | 'excluded'
+type FileFilter = 'all' | FileRowSource
+
+interface FileRow {
+  file: FileItem
+  source: FileRowSource
+}
+
+const fileFilter = ref<FileFilter>('all')
+const fileRows = computed<FileRow[]>(() => [
+  ...projectFiles.value.map((item) => ({ file: item.file, source: 'project_inherited' as const })),
+  ...extraFiles.value.map((item) => ({ file: item.file, source: 'task_added' as const })),
+  ...excludedFiles.value.map((file) => ({ file, source: 'excluded' as const })),
+])
+const visibleFileRows = computed<FileRow[]>(() =>
+  fileFilter.value === 'all'
+    ? fileRows.value
+    : fileRows.value.filter((row) => row.source === fileFilter.value),
+)
+
+function sourceLabel(source: FileRowSource): string {
+  if (source === 'project_inherited') return '项目继承'
+  if (source === 'task_added') return '额外引用'
+  return '已排除'
+}
+
+async function handleFileAction(row: FileRow): Promise<void> {
+  if (row.source === 'excluded') {
+    await restoreFile(row.file)
+    return
+  }
+  if (row.source === 'task_added') {
+    await removeExtraFile(row.file)
+    return
+  }
+  const item = projectFiles.value.find((entry) => entry.file.id === row.file.id)
+  if (item) await excludeFile(item)
+}
+
 const modelLabel = computed(() => {
   const current = task.value
   if (!current || !current.model_name) return '未配置模型'
@@ -130,6 +180,8 @@ async function load(): Promise<void> {
     const current = await getTask(id)
     task.value = current
     statusDraft.value = current.status
+    syncSelectedModel()
+    syncModelParams()
     const projectPromise = current.project_id
       ? getProject(current.project_id).catch(() => null)
       : Promise.resolve(null)
@@ -286,6 +338,85 @@ async function bindProject(): Promise<void> {
   }
 }
 
+function modelKey(provider: string, model: string): string {
+  return `${provider}::${model}`
+}
+
+function syncSelectedModel(): void {
+  const current = task.value
+  if (current?.model_provider && current.model_name) {
+    selectedModel.value = modelKey(current.model_provider, current.model_name)
+  } else {
+    selectedModel.value = ''
+  }
+}
+
+async function loadModels(): Promise<void> {
+  try {
+    models.value = await listModels()
+  } catch {
+    models.value = []
+  }
+  syncSelectedModel()
+}
+
+async function changeModel(): Promise<void> {
+  const current = task.value
+  if (!current || !selectedModel.value) return
+  const [provider, model] = selectedModel.value.split('::')
+  modelSaving.value = true
+  try {
+    task.value = await updateTask(current.id, {
+      model_provider: provider,
+      model_name: model,
+    })
+    app.notify('success', `模型已切换为 ${provider} / ${model}`)
+  } catch (error) {
+    app.notifyError(error)
+    syncSelectedModel()
+  } finally {
+    modelSaving.value = false
+  }
+}
+
+function syncModelParams(): void {
+  const current = task.value
+  temperatureDraft.value = current?.temperature != null ? String(current.temperature) : ''
+  maxTokensDraft.value = current?.max_tokens != null ? String(current.max_tokens) : ''
+}
+
+async function saveModelParams(): Promise<void> {
+  const current = task.value
+  if (!current) return
+  const temperature = temperatureDraft.value.trim() === '' ? null : Number(temperatureDraft.value)
+  const maxTokens = maxTokensDraft.value.trim() === '' ? null : Number(maxTokensDraft.value)
+  if (temperature !== null && (Number.isNaN(temperature) || temperature < 0 || temperature > 2)) {
+    app.notify('error', 'Temperature 需在 0 到 2 之间')
+    return
+  }
+  if (maxTokens !== null && (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 32000)) {
+    app.notify('error', 'Max tokens 需为 1 到 32000 的整数')
+    return
+  }
+  paramsSaving.value = true
+  try {
+    task.value = await updateTask(current.id, {
+      temperature,
+      max_tokens: maxTokens,
+    })
+    syncModelParams()
+    app.notify('success', '模型参数已保存')
+  } catch (error) {
+    app.notifyError(error)
+  } finally {
+    paramsSaving.value = false
+  }
+}
+
+function onUsageUpdated(usage: TaskUsage | null): void {
+  if (task.value) task.value = { ...task.value, usage }
+}
+
 watch(taskId, () => {
   activeTab.value = 'chat'
   void load()
@@ -294,6 +425,7 @@ watch(taskId, () => {
 onMounted(() => {
   void load()
   void loadProjects()
+  void loadModels()
 })
 </script>
 
@@ -395,29 +527,11 @@ onMounted(() => {
       <!-- Chat -->
       <section v-if="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
         <div class="card chat-card">
-          <EmptyState
-            icon="sparkles"
-            title="对话功能将在 Phase 2 提供"
-            description="本阶段先建立 Task、文件上下文与工作空间结构；对话、流式响应与 Execution 状态将随 Phase 2 的模型接入一起开放。"
+          <ChatPanel
+            :task-id="task.id"
+            :has-model="models.length > 0"
+            @usage-updated="onUsageUpdated"
           />
-          <div class="composer">
-            <div class="composer__box">
-              <textarea
-                class="composer__input"
-                rows="3"
-                placeholder="Chat 输入将在 Phase 2 启用"
-                disabled
-                aria-label="对话输入框（当前不可用）"
-              />
-              <div class="composer__bar">
-                <span class="composer__hint">当前阶段不发送消息，也不会伪造 AI 回复。</span>
-                <button type="button" class="btn btn--primary btn--sm" disabled>
-                  <AppIcon name="send" :size="14" />
-                  发送
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -462,25 +576,6 @@ onMounted(() => {
           </template>
         </section>
 
-        <div class="context-stats">
-          <div class="context-stat">
-            <span class="context-stat__value">{{ totalAvailable }}</span>
-            <span class="context-stat__label">可用文件</span>
-          </div>
-          <div class="context-stat">
-            <span class="context-stat__value">{{ projectFiles.length }}</span>
-            <span class="context-stat__label">项目继承</span>
-          </div>
-          <div class="context-stat">
-            <span class="context-stat__value">{{ extraFiles.length }}</span>
-            <span class="context-stat__label">额外引用</span>
-          </div>
-          <div class="context-stat">
-            <span class="context-stat__value">{{ excludedFiles.length }}</span>
-            <span class="context-stat__label">已排除</span>
-          </div>
-        </div>
-
         <div v-if="fileContextError" class="panel panel--error">
           <AppIcon name="alert" :size="16" />
           <div>
@@ -494,103 +589,92 @@ onMounted(() => {
           <section class="card context-section">
             <header class="context-head">
               <div>
-                <h2 class="context-title">项目继承文件</h2>
+                <h2 class="context-title">文件上下文</h2>
                 <p class="context-desc">
-                  来自所属 Project、默认可用的文件。可以排除不需要的文件。
+                  项目继承 + 额外引用 − 排除 = 可用文件；这里管理的是可用上下文，不是实际读取的文件。
                 </p>
               </div>
-              <span class="chip chip--muted">{{ projectFiles.length }}</span>
-            </header>
-            <div v-if="!project" class="context-empty">
-              该 Task 不属于任何 Project，因此没有项目继承文件。
-            </div>
-            <div v-else-if="projectFiles.length === 0" class="context-empty">
-              所属 Project（{{ project.name }}）当前没有关联文件，可先在 Project 的 Files 中添加。
-              <RouterLink :to="`/projects/${project.id}`" class="context-link">前往 Project</RouterLink>
-            </div>
-            <ul v-else class="file-list">
-              <li v-for="item in projectFiles" :key="item.file.id" class="file-item">
-                <span class="file-item__icon"><AppIcon name="file" :size="15" /></span>
-                <div class="file-item__main">
-                  <span class="file-item__name" :title="item.file.filename">{{ item.file.filename }}</span>
-                  <span class="file-item__meta">
-                    {{ fileTypeLabel(item.file.file_type) }} · {{ formatBytes(item.file.size) }} · 来源：项目继承
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  class="btn btn--ghost btn--sm"
-                  :disabled="fileActionBusy === item.file.id"
-                  @click="excludeFile(item)"
-                >
-                  <span v-if="fileActionBusy === item.file.id" class="spinner spinner--sm" aria-hidden="true" />
-                  排除
-                </button>
-              </li>
-            </ul>
-          </section>
-
-          <section class="card context-section">
-            <header class="context-head">
-              <div>
-                <h2 class="context-title">额外引用文件</h2>
-                <p class="context-desc">从 Global Library 手动添加到当前 Task，不依赖 Project 继承关系。</p>
-              </div>
-              <button type="button" class="btn btn--ghost btn--sm" :disabled="addingFiles" @click="pickerOpen = true">
+              <button
+                type="button"
+                class="btn btn--ghost btn--sm"
+                :disabled="addingFiles"
+                @click="pickerOpen = true"
+              >
                 <AppIcon name="plus" :size="14" />
                 从 Library 添加
               </button>
             </header>
-            <div v-if="extraFiles.length === 0" class="context-empty">
-              暂无额外引用的文件。可以从 Library 添加与本任务相关的资料。
+
+            <div class="file-tabs" role="tablist" aria-label="文件上下文分类">
+              <button
+                type="button"
+                class="file-tab"
+                :class="{ 'file-tab--active': fileFilter === 'all' }"
+                @click="fileFilter = 'all'"
+              >
+                全部
+                <span class="chip chip--muted">{{ totalAvailable + excludedFiles.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="file-tab"
+                :class="{ 'file-tab--active': fileFilter === 'project_inherited' }"
+                @click="fileFilter = 'project_inherited'"
+              >
+                项目继承
+                <span class="chip chip--muted">{{ projectFiles.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="file-tab"
+                :class="{ 'file-tab--active': fileFilter === 'task_added' }"
+                @click="fileFilter = 'task_added'"
+              >
+                额外引用
+                <span class="chip chip--muted">{{ extraFiles.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="file-tab"
+                :class="{ 'file-tab--active': fileFilter === 'excluded' }"
+                @click="fileFilter = 'excluded'"
+              >
+                已排除
+                <span class="chip chip--muted">{{ excludedFiles.length }}</span>
+              </button>
+            </div>
+
+            <div v-if="!project && fileFilter === 'project_inherited'" class="context-empty">
+              该 Task 不属于任何 Project，因此没有项目继承文件。
+            </div>
+            <div v-else-if="visibleFileRows.length === 0" class="context-empty">
+              当前分类下没有文件。
             </div>
             <ul v-else class="file-list">
-              <li v-for="item in extraFiles" :key="item.file.id" class="file-item">
+              <li
+                v-for="row in visibleFileRows"
+                :key="row.file.id"
+                class="file-item"
+                :class="{ 'file-item--muted': row.source === 'excluded' }"
+              >
                 <span class="file-item__icon"><AppIcon name="file" :size="15" /></span>
                 <div class="file-item__main">
-                  <span class="file-item__name" :title="item.file.filename">{{ item.file.filename }}</span>
+                  <span class="file-item__name" :title="row.file.filename">{{ row.file.filename }}</span>
                   <span class="file-item__meta">
-                    {{ fileTypeLabel(item.file.file_type) }} · {{ formatBytes(item.file.size) }} · 来源：额外引用
+                    {{ fileTypeLabel(row.file.file_type) }} · {{ formatBytes(row.file.size) }}
                   </span>
                 </div>
+                <span class="file-item__source" :class="'file-item__source--' + row.source">
+                  {{ sourceLabel(row.source) }}
+                </span>
                 <button
                   type="button"
                   class="btn btn--ghost btn--sm"
-                  :disabled="fileActionBusy === item.file.id"
-                  @click="removeExtraFile(item.file)"
+                  :disabled="fileActionBusy === row.file.id"
+                  @click="handleFileAction(row)"
                 >
-                  移除
-                </button>
-              </li>
-            </ul>
-          </section>
-
-          <section class="card context-section">
-            <header class="context-head">
-              <div>
-                <h2 class="context-title">已排除文件</h2>
-                <p class="context-desc">原本来自 Project 继承范围，但被当前 Task 排除的文件。可以恢复使用。</p>
-              </div>
-              <span class="chip chip--muted">{{ excludedFiles.length }}</span>
-            </header>
-            <div v-if="excludedFiles.length === 0" class="context-empty">没有被排除的文件。</div>
-            <ul v-else class="file-list">
-              <li v-for="file in excludedFiles" :key="file.id" class="file-item file-item--muted">
-                <span class="file-item__icon"><AppIcon name="file" :size="15" /></span>
-                <div class="file-item__main">
-                  <span class="file-item__name" :title="file.filename">{{ file.filename }}</span>
-                  <span class="file-item__meta">
-                    {{ fileTypeLabel(file.file_type) }} · {{ formatBytes(file.size) }} · 状态：已排除
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  class="btn btn--ghost btn--sm"
-                  :disabled="fileActionBusy === file.id"
-                  @click="restoreFile(file)"
-                >
-                  <AppIcon name="refresh" :size="13" />
-                  恢复
+                  <span v-if="fileActionBusy === row.file.id" class="spinner spinner--sm" aria-hidden="true" />
+                  {{ row.source === 'excluded' ? '恢复' : row.source === 'task_added' ? '移除' : '排除' }}
                 </button>
               </li>
             </ul>
@@ -600,15 +684,74 @@ onMounted(() => {
             <header class="context-head">
               <div>
                 <h2 class="context-title">模型配置</h2>
-                <p class="context-desc">Task 使用的模型 Provider 与模型将在 Phase 2 提供配置入口。</p>
+                <p class="context-desc">
+                  选择本 Task 使用的模型；未选择时使用已配置 Provider 的默认模型。
+                </p>
               </div>
-              <span class="chip chip--muted">Phase 2</span>
+              <span class="chip chip--muted">{{ modelLabel }}</span>
             </header>
-            <div class="model-info">
-              <span class="model-info__label">当前记录</span>
-              <span class="model-info__value">{{ modelLabel }}</span>
-              <span class="model-info__hint">模型切换将影响后续调用，不会改变历史 Execution 已记录的模型信息。</span>
+            <div class="model-select">
+              <select
+                v-model="selectedModel"
+                class="select"
+                :disabled="modelSaving || models.length === 0"
+                @change="changeModel"
+              >
+                <option value="">使用默认模型</option>
+                <option
+                  v-for="item in models"
+                  :key="modelKey(item.provider, item.model)"
+                  :value="modelKey(item.provider, item.model)"
+                >
+                  {{ item.label }}
+                </option>
+              </select>
+              <span v-if="models.length === 0" class="model-select__hint">
+                还没有可用模型：请先在 Settings 中配置 Provider。
+              </span>
+              <span v-else class="model-select__hint">
+                切换只影响之后的对话与调用，不改动历史消息记录。
+              </span>
             </div>
+
+            <div class="model-params">
+              <label class="field">
+                <span class="field__label">Temperature</span>
+                <input
+                  v-model="temperatureDraft"
+                  class="input"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  placeholder="默认（留空）"
+                />
+              </label>
+              <label class="field">
+                <span class="field__label">Max tokens</span>
+                <input
+                  v-model="maxTokensDraft"
+                  class="input"
+                  type="number"
+                  min="1"
+                  max="32000"
+                  step="1"
+                  placeholder="默认（留空）"
+                />
+              </label>
+              <button
+                type="button"
+                class="btn btn--ghost btn--sm"
+                :disabled="paramsSaving"
+                @click="saveModelParams"
+              >
+                <span v-if="paramsSaving" class="spinner spinner--sm" aria-hidden="true" />
+                保存参数
+              </button>
+            </div>
+            <p class="model-select__hint">
+              参数留空表示使用 Provider 默认值；保存后影响之后的所有调用。
+            </p>
           </section>
         </template>
       </section>
@@ -1041,6 +1184,87 @@ onMounted(() => {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.model-select {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.model-select__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.model-params {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 0 16px 12px;
+  flex-wrap: wrap;
+}
+
+.model-params .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 130px;
+}
+
+.model-params .field__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.file-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 12px;
+}
+
+.file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.13s ease,
+    color 0.13s ease,
+    background 0.13s ease;
+}
+
+.file-tab:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.file-tab--active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.file-item__source {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.file-item__source--excluded {
+  border-color: var(--danger-soft);
+  color: var(--danger);
 }
 
 @media (max-width: 900px) {

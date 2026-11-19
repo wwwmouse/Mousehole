@@ -12,6 +12,8 @@ export interface Workspace {
   id: string
   name: string
   description: string | null
+  default_temperature: number | null
+  default_max_tokens: number | null
   created_at: string
   updated_at: string
 }
@@ -28,6 +30,12 @@ export interface Project {
   file_count: number
 }
 
+export interface TaskUsage {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
 export interface Task {
   id: string
   workspace_id: string
@@ -37,6 +45,9 @@ export interface Task {
   status: TaskStatus
   model_provider: string | null
   model_name: string | null
+  temperature: number | null
+  max_tokens: number | null
+  usage: TaskUsage | null
   created_at: string
   updated_at: string
 }
@@ -107,6 +118,8 @@ export interface CreateTaskPayload {
   description?: string | null
   model_provider?: string | null
   model_name?: string | null
+  temperature?: number | null
+  max_tokens?: number | null
 }
 
 export interface UpdateTaskPayload {
@@ -116,11 +129,15 @@ export interface UpdateTaskPayload {
   project_id?: string | null
   model_provider?: string | null
   model_name?: string | null
+  temperature?: number | null
+  max_tokens?: number | null
 }
 
 export interface UpdateWorkspacePayload {
   name?: string
   description?: string | null
+  default_temperature?: number | null
+  default_max_tokens?: number | null
 }
 
 export interface ProjectListQuery {
@@ -149,6 +166,51 @@ export interface FileListQuery {
 export interface TaskFileMutationPayload {
   file_id: string
   action: FileOverrideAction
+}
+
+export interface ChatMessage {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  sequence: number
+  usage: TaskUsage | null
+  created_at: string
+}
+
+export interface TaskMessages {
+  task_id: string
+  conversation_id: string | null
+  messages: ChatMessage[]
+  task_usage: TaskUsage | null
+}
+
+export interface Provider {
+  name: string
+  kind: string
+  base_url: string
+  configured: boolean
+  masked_key: string
+  models: string[]
+  default_model: string | null
+}
+
+export interface ProviderUpdate {
+  api_key?: string
+  base_url?: string
+  models?: string[]
+  default_model?: string | null
+}
+
+export interface ProviderTestResult {
+  ok: boolean
+  message: string
+}
+
+export interface ModelInfo {
+  provider: string
+  model: string
+  label: string
 }
 
 /** Normalised backend error envelope: { error: { code, message, details } }. */

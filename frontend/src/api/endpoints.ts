@@ -6,13 +6,18 @@ import type {
   FileDetail,
   FileItem,
   FileListQuery,
+  ModelInfo,
   Project,
   ProjectFile,
   ProjectListQuery,
+  Provider,
+  ProviderTestResult,
+  ProviderUpdate,
   Task,
   TaskFileContext,
   TaskFileMutationPayload,
   TaskListQuery,
+  TaskMessages,
   UpdateProjectPayload,
   UpdateTaskPayload,
   UpdateWorkspacePayload,
@@ -129,6 +134,35 @@ export function removeTaskFileOverride(taskId: string, fileId: string): Promise<
     `/tasks/${encodeURIComponent(taskId)}/files/${encodeURIComponent(fileId)}`,
     { method: 'DELETE' },
   )
+}
+
+/* ---------------------------------- chat ------------------------------------- */
+
+export function listTaskMessages(taskId: string): Promise<TaskMessages> {
+  return request<TaskMessages>(`/tasks/${encodeURIComponent(taskId)}/messages`)
+}
+
+/* --------------------------------- providers --------------------------------- */
+
+export function listProviders(): Promise<Provider[]> {
+  return request<Provider[]>('/providers')
+}
+
+export function updateProvider(name: string, payload: ProviderUpdate): Promise<Provider> {
+  return request<Provider>(`/providers/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    json: payload,
+  })
+}
+
+export function testProvider(name: string): Promise<ProviderTestResult> {
+  return request<ProviderTestResult>(`/providers/${encodeURIComponent(name)}/test`, {
+    method: 'POST',
+  })
+}
+
+export function listModels(): Promise<ModelInfo[]> {
+  return request<ModelInfo[]>('/models')
 }
 
 /* ------------------------------------ file ----------------------------------- */

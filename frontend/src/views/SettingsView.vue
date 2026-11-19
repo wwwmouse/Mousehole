@@ -5,6 +5,13 @@ import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import {
+  listProviders,
+  testProvider,
+  updateProvider,
+  updateWorkspace,
+} from '@/api/endpoints'
+import type { Provider, ProviderTestResult, ProviderUpdate } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
@@ -14,6 +21,28 @@ const app = useAppStore()
 const workspaceName = ref('')
 const saving = ref(false)
 const saveError = ref<string | null>(null)
+
+const defaultTemperatureDraft = ref('')
+const defaultMaxTokensDraft = ref('')
+const savingDefaults = ref(false)
+
+const providers = ref<Provider[]>([])
+const loadingProviders = ref(true)
+const providerError = ref<string | null>(null)
+const keyDraft = ref<Record<string, string>>({})
+const baseUrlDraft = ref<Record<string, string>>({})
+const savingProvider = ref<string | null>(null)
+const testingProvider = ref<string | null>(null)
+const testResults = ref<Record<string, ProviderTestResult | null>>({})
+const expanded = ref<Record<string, boolean>>({})
+
+function toggleProvider(name: string): void {
+  expanded.value[name] = !expanded.value[name]
+}
+
+const configuredCount = computed(
+  () => providers.value.filter((item) => item.configured).length,
+)
 
 const workspace = computed(() => app.currentWorkspace)
 
@@ -26,7 +55,12 @@ const canSave = computed(() => {
 watch(
   () => app.currentWorkspace?.id,
   () => {
-    workspaceName.value = app.currentWorkspace?.name ?? ''
+    const current = app.currentWorkspace
+    workspaceName.value = current?.name ?? ''
+    defaultTemperatureDraft.value =
+      current?.default_temperature != null ? String(current.default_temperature) : ''
+    defaultMaxTokensDraft.value =
+      current?.default_max_tokens != null ? String(current.default_max_tokens) : ''
     saveError.value = null
   },
   { immediate: true },
@@ -56,8 +90,105 @@ async function reloadWorkspace(): Promise<void> {
   workspaceName.value = app.currentWorkspace?.name ?? ''
 }
 
+async function saveDefaults(): Promise<void> {
+  const current = app.currentWorkspace
+  if (!current) return
+  const temperature =
+    defaultTemperatureDraft.value.trim() === ''
+      ? null
+      : Number(defaultTemperatureDraft.value)
+  const maxTokens =
+    defaultMaxTokensDraft.value.trim() === ''
+      ? null
+      : Number(defaultMaxTokensDraft.value)
+  if (
+    temperature !== null &&
+    (Number.isNaN(temperature) || temperature < 0 || temperature > 2)
+  ) {
+    app.notify('error', 'Temperature 需在 0 到 2 之间')
+    return
+  }
+  if (
+    maxTokens !== null &&
+    (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 32000)
+  ) {
+    app.notify('error', 'Max tokens 需为 1 到 32000 的整数')
+    return
+  }
+  savingDefaults.value = true
+  try {
+    await updateWorkspace(current.id, {
+      default_temperature: temperature,
+      default_max_tokens: maxTokens,
+    })
+    await app.loadWorkspace(true)
+    app.notify('success', '模型默认参数已保存')
+  } catch (error) {
+    app.notifyError(error)
+  } finally {
+    savingDefaults.value = false
+  }
+}
+
+async function loadProviders(): Promise<void> {
+  loadingProviders.value = true
+  providerError.value = null
+  try {
+    providers.value = await listProviders()
+    for (const provider of providers.value) {
+      baseUrlDraft.value[provider.name] = provider.base_url
+      if (!(provider.name in keyDraft.value)) keyDraft.value[provider.name] = ''
+    }
+  } catch (error) {
+    providerError.value = errorMessage(error)
+  } finally {
+    loadingProviders.value = false
+  }
+}
+
+async function saveProvider(name: string): Promise<void> {
+  const provider = providers.value.find((item) => item.name === name)
+  if (!provider) return
+  const payload: ProviderUpdate = {}
+  const key = (keyDraft.value[name] ?? '').trim()
+  const baseUrl = (baseUrlDraft.value[name] ?? '').trim()
+  if (key) payload.api_key = key
+  if (baseUrl && baseUrl !== provider.base_url) payload.base_url = baseUrl
+  if (!payload.api_key && !payload.base_url) {
+    if (provider.configured) {
+      app.notify('info', '没有需要保存的修改')
+      return
+    }
+    payload.base_url = baseUrl || provider.base_url
+  }
+  savingProvider.value = name
+  try {
+    await updateProvider(name, payload)
+    keyDraft.value[name] = ''
+    app.notify('success', `${name} 配置已保存`)
+    await loadProviders()
+  } catch (error) {
+    app.notifyError(error)
+  } finally {
+    savingProvider.value = null
+  }
+}
+
+async function runTest(name: string): Promise<void> {
+  testingProvider.value = name
+  testResults.value[name] = null
+  try {
+    testResults.value[name] = await testProvider(name)
+  } catch (error) {
+    testResults.value[name] = { ok: false, message: errorMessage(error) }
+  } finally {
+    testingProvider.value = null
+  }
+}
+
 onMounted(() => {
   void reloadWorkspace()
+  void loadProviders()
 })
 </script>
 
@@ -148,30 +279,177 @@ onMounted(() => {
       <section class="card settings-card">
         <header class="settings-card__head">
           <div>
-            <h2 class="settings-card__title">Application Settings</h2>
-            <p class="settings-card__desc">模型 Provider 与密钥配置将在 Phase 2 提供。</p>
+            <h2 class="settings-card__title">模型默认参数</h2>
+            <p class="settings-card__desc">
+              工作空间级默认值；Task 内的单独设置会覆盖这里的值。
+            </p>
           </div>
-          <span class="chip chip--muted">Phase 2</span>
         </header>
         <div class="settings-card__body">
-          <div class="disabled-form">
+          <div class="default-params">
             <label class="field">
-              <span class="field__label">模型 Provider</span>
-              <select class="select" disabled>
-                <option>将在 Phase 2 提供</option>
-              </select>
+              <span class="field__label">Temperature</span>
+              <input
+                v-model="defaultTemperatureDraft"
+                class="input"
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                placeholder="默认（留空）"
+              />
             </label>
             <label class="field">
-              <span class="field__label">API Key</span>
-              <input class="input" type="password" value="" placeholder="不在此阶段存储密钥" disabled />
+              <span class="field__label">Max tokens</span>
+              <input
+                v-model="defaultMaxTokensDraft"
+                class="input"
+                type="number"
+                min="1"
+                max="32000"
+                step="1"
+                placeholder="默认（留空）"
+              />
             </label>
+            <button
+              type="button"
+              class="btn btn--primary"
+              :disabled="savingDefaults"
+              @click="saveDefaults"
+            >
+              <span v-if="savingDefaults" class="spinner spinner--sm" aria-hidden="true" />
+              保存默认值
+            </button>
           </div>
           <p class="settings-card__note">
             <AppIcon name="info" :size="14" />
             <span>
-              Phase 1 不接入模型供应商，因此此处没有可配置项。前端不会伪造已保存的 Provider 或密钥状态。
+              留空表示不传该参数，使用模型 Provider 自身默认值；Task 未单独设置时使用这里的值。
             </span>
           </p>
+        </div>
+      </section>
+
+      <section class="card settings-card">
+        <header class="settings-card__head">
+          <div>
+            <h2 class="settings-card__title">模型 Provider</h2>
+            <p class="settings-card__desc">
+              配置云端模型密钥或本地 Ollama；密钥只保存在本机，接口只返回掩码。
+            </p>
+          </div>
+          <span class="chip chip--muted">{{ configuredCount }} / {{ providers.length }} 已配置</span>
+        </header>
+        <div class="settings-card__body">
+          <LoadingState v-if="loadingProviders" compact label="正在加载 Provider…" />
+
+          <div v-else-if="providerError" class="panel panel--error">
+            <AppIcon name="alert" :size="16" />
+            <div>
+              <p class="panel--error__title">Provider 加载失败</p>
+              <p class="panel--error__desc">{{ providerError }}</p>
+            </div>
+            <button type="button" class="btn btn--ghost btn--sm" @click="loadProviders">重试</button>
+          </div>
+
+          <div v-else class="provider-list">
+            <article
+              v-for="provider in providers"
+              :key="provider.name"
+              class="provider-card"
+              :class="{
+                'provider-card--configured': provider.configured,
+                'provider-card--open': expanded[provider.name],
+              }"
+            >
+              <header
+                class="provider-card__head"
+                role="button"
+                tabindex="0"
+                :aria-expanded="Boolean(expanded[provider.name])"
+                @click="toggleProvider(provider.name)"
+                @keydown.enter.prevent="toggleProvider(provider.name)"
+                @keydown.space.prevent="toggleProvider(provider.name)"
+              >
+                <div class="provider-card__title">
+                  <AppIcon
+                    :name="expanded[provider.name] ? 'chevron-down' : 'chevron-right'"
+                    :size="14"
+                  />
+                  <strong>{{ provider.name }}</strong>
+                  <span class="chip chip--muted">{{ provider.kind }}</span>
+                </div>
+                <span
+                  class="chip provider-card__status"
+                  :class="provider.configured ? 'provider-card__status--ok' : 'chip--muted'"
+                >
+                  {{ provider.configured ? '已配置' : '未配置' }}
+                </span>
+              </header>
+
+              <div v-if="expanded[provider.name]" class="provider-card__body">
+                <label v-if="provider.kind === 'openai'" class="field">
+                  <span class="field__label">API Key</span>
+                  <input
+                    v-model="keyDraft[provider.name]"
+                    class="input"
+                    type="password"
+                    autocomplete="off"
+                    :placeholder="provider.masked_key || '尚未配置'"
+                  />
+                  <span class="field__hint">保存后只返回掩码；不会写入日志。</span>
+                </label>
+
+                <label class="field">
+                  <span class="field__label">Base URL</span>
+                  <input v-model="baseUrlDraft[provider.name]" class="input" type="text" />
+                  <span class="field__hint">
+                    Ollama 保存后即视为启用；请确认本机 Ollama 正在运行。
+                  </span>
+                </label>
+
+                <div v-if="provider.models.length" class="provider-card__models">
+                  <span class="field__label">可用模型</span>
+                  <div class="chip-row">
+                    <span v-for="model in provider.models" :key="model" class="chip chip--muted">
+                      {{ model }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="provider-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn--primary btn--sm"
+                    :disabled="savingProvider === provider.name"
+                    @click="saveProvider(provider.name)"
+                  >
+                    <span
+                      v-if="savingProvider === provider.name"
+                      class="spinner spinner--sm"
+                      aria-hidden="true"
+                    />
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="testingProvider === provider.name"
+                    @click="runTest(provider.name)"
+                  >
+                    测试连接
+                  </button>
+                  <span
+                    v-if="testResults[provider.name]"
+                    class="provider-test"
+                    :class="testResults[provider.name]?.ok ? 'provider-test--ok' : 'provider-test--fail'"
+                  >
+                    {{ testResults[provider.name]?.message }}
+                  </span>
+                </div>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
     </template>
@@ -249,6 +527,17 @@ onMounted(() => {
   gap: 8px;
 }
 
+.default-params {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.default-params .field {
+  min-width: 160px;
+}
+
 .inline-field .input {
   flex: 1;
 }
@@ -315,6 +604,92 @@ onMounted(() => {
 .settings-card__note :deep(svg) {
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.provider-card--configured {
+  border-color: var(--accent-border);
+}
+
+.provider-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.provider-card__head:hover .provider-card__title strong {
+  color: var(--text);
+}
+
+.provider-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 2px;
+  border-top: 1px solid var(--border);
+}
+
+.provider-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.provider-card__status--ok {
+  color: var(--success);
+  border-color: var(--success-soft);
+}
+
+.provider-card__models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+  border-top: 1px solid var(--border);
+}
+
+.provider-test {
+  font-size: 11.5px;
+}
+
+.provider-test--ok {
+  color: var(--success);
+}
+
+.provider-test--fail {
+  color: var(--danger);
 }
 
 @media (max-width: 720px) {
