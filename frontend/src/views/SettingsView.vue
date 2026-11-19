@@ -163,9 +163,13 @@ async function saveProvider(name: string): Promise<void> {
   }
   savingProvider.value = name
   try {
-    await updateProvider(name, payload)
+    const updated = await updateProvider(name, payload)
     keyDraft.value[name] = ''
-    app.notify('success', `${name} 配置已保存`)
+    if (updated.kind === 'openai' && !updated.configured) {
+      app.notify('info', `${name} 配置已保存，但尚未填写 API Key`)
+    } else {
+      app.notify('success', `${name} 配置已保存`)
+    }
     await loadProviders()
   } catch (error) {
     app.notifyError(error)

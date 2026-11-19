@@ -112,8 +112,14 @@ async function send(): Promise<void> {
       controller.signal,
     )
   } catch (error) {
-    failed = true
-    streamError.value = errorMessage(error)
+    const aborted =
+      error instanceof DOMException && error.name === 'AbortError'
+    if (aborted) {
+      app.notify('info', '已停止生成')
+    } else {
+      failed = true
+      streamError.value = errorMessage(error)
+    }
   } finally {
     sending.value = false
     streamText.value = ''
