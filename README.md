@@ -103,30 +103,64 @@ mousehole/
 
 ## 本地运行
 
-```bash
-# 1. 数据库
-docker compose up -d postgres
-docker compose ps                  # 应为 healthy
+> 需要**三个终端**：数据库（Docker）、后端（Python）、前端（Node），三者互相独立。
+> 常见误区：`alembic upgrade head` 只是升级数据库表结构，**不是启动后端**；后端由 `uvicorn` 启动，前端由 `npm run dev` 启动。
 
-# 2. 后端（另开终端）
-cd backend
+### 前置安装（只需一次）
+
+```powershell
+# 后端依赖
+cd E:\VScode\Mousehole\backend
 py -3.14 -m venv .venv
-.\.venv\Scripts\Activate.ps1      # PowerShell
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn app.main:app --reload      # API 文档：http://127.0.0.1:8000/docs
-pytest -q                          # 自动化测试
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 3. 前端（另开终端）
-cd frontend
+# 前端依赖
+cd ..\frontend
 npm install
-npm run dev                        # http://localhost:5173
-npm run build                      # 类型检查 + 生产构建
 ```
+
+### 终端 1：数据库
+
+```powershell
+cd E:\VScode\Mousehole
+docker compose up -d postgres
+docker compose ps                  # 看到 healthy 即可
+```
+
+### 终端 2：后端
+
+```powershell
+cd E:\VScode\Mousehole\backend
+
+# ① 升级数据库结构（有新增/修改表时执行一次；不是启动服务）
+.\.venv\Scripts\python.exe -m alembic upgrade head
+
+# ② 启动后端 API（这一步才是“启动后端”）
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+# API 文档：http://127.0.0.1:8000/docs
+# 健康检查：http://127.0.0.1:8000/api/v1/health
+```
+
+### 终端 3：前端
+
+```powershell
+cd E:\VScode\Mousehole\frontend
+npm run dev                        # http://localhost:5173（Vite 代理 /api 到后端）
+# 生产构建预览：npm run build; npm run preview
+```
+
+### 常用命令
+
+| 目的 | 命令 |
+|---|---|
+| 后端测试 | `cd backend; .\.venv\Scripts\python.exe -m pytest tests -q` |
+| 前端类型检查 + 构建 | `cd frontend; npm run build` |
+| 升级数据库结构 | `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head` |
+| 查看当前迁移版本 | `cd backend; .\.venv\Scripts\python.exe -m alembic current` |
 
 首次启动时后端会自动创建默认 Workspace；`.env` 可选（复制 `.env.example` 即可，默认值可直接跑通），但 `.env` 永不入库。
 
-## 已实现 API（Phase 1）
+## 已实现 API（Phase 1 + Phase 2）
 
 | 领域 | 端点 |
 |---|---|
@@ -136,14 +170,28 @@ npm run build                      # 类型检查 + 生产构建
 | Task | `GET/POST /tasks`、`GET/PATCH /tasks/{id}`（禁止改 project_id，返回 422） |
 | File | `POST /files`（multipart）、`GET /files`、`GET/DELETE /files/{id}`、`GET /files/{id}/content` |
 | Task 文件上下文 | `GET/POST /tasks/{id}/files`、`DELETE /tasks/{id}/files/{file_id}` |
+| 对话（Phase 2） | `GET /tasks/{id}/messages`、`POST /tasks/{id}/messages`（SSE 流式） |
+| 模型 Provider | `GET/PUT /providers`、`POST /providers/{name}/test`（测试连接并自动发现模型） |
+| 模型列表 | `GET /models` |
 | 错误格式 | `{"error":{"code":"...","message":"...","details":...}}` |
+
+## 模型配置（Phase 2）
+
+1. 打开前端 **Settings** 页；
+2. 展开 `deepseek` / `openai` / `ollama` 卡片（点击标题行箭头）；
+3. 云端 Provider 填 API Key；Ollama 确认 Base URL 后保存即启用；
+4. 点 **测试连接**：成功后会**自动发现该 Provider 实际可用的模型列表**；
+5. 到 **Task → Settings → 模型配置** 选择模型，并可设置 Temperature / Max tokens；
+   留空则使用 Settings 页 **模型默认参数** 中的工作空间默认值。
+
+> 模型选择是 **按 Task 生效**（切换只影响之后的调用）；密钥保存在本机 `data/provider_config.json`，接口只返回掩码，不写入日志、不入 Git。
 
 ## 开发路线
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
-| Phase 1 | 工程基础与核心数据管理（Workspace / Project / Task / File / 解析 / 继承规则） | 开发中（待人工验收） |
-| Phase 2 | Conversation 与模型接入（Provider、流式、模型选择） | 未开始 |
+| Phase 1 | 工程基础与核心数据管理（Workspace / Project / Task / File / 解析 / 继承规则） | 已完成（已验收） |
+| Phase 2 | Conversation 与模型接入（Provider、流式、模型选择、usage） | 开发完成（待人工验收） |
 | Phase 3 | Execution 与 Artifact 核心闭环（Pipeline、SSE、版本、快照） | 未开始 |
 | Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、文档） | 未开始 |
 
