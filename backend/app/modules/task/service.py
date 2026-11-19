@@ -120,6 +120,8 @@ def create_task(session: Session, payload: TaskCreate) -> TaskRead:
         description=payload.description,
         model_provider=payload.model_provider,
         model_name=payload.model_name,
+        temperature=payload.temperature,
+        max_tokens=payload.max_tokens,
     )
     session.commit()
     session.refresh(task)
@@ -145,6 +147,10 @@ def update_task(session: Session, task_id: uuid.UUID, payload: TaskUpdate) -> Ta
         task.model_provider = data["model_provider"]
     if "model_name" in data:
         task.model_name = data["model_name"]
+    if "temperature" in data:
+        task.temperature = data["temperature"]
+    if "max_tokens" in data:
+        task.max_tokens = data["max_tokens"]
     session.commit()
     session.refresh(task)
     return TaskRead.model_validate(task)

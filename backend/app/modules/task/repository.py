@@ -41,6 +41,8 @@ def create(
     description: str | None,
     model_provider: str | None,
     model_name: str | None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> Task:
     task = Task(
         workspace_id=workspace_id,
@@ -49,6 +51,8 @@ def create(
         description=description,
         model_provider=model_provider,
         model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     session.add(task)
     session.flush()

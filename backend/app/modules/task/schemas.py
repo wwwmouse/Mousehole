@@ -13,6 +13,8 @@ class TaskCreate(BaseModel):
     description: str | None = None
     model_provider: str | None = Field(default=None, max_length=50)
     model_name: str | None = Field(default=None, max_length=100)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=32000)
 
 
 class TaskUpdate(BaseModel):
@@ -21,6 +23,8 @@ class TaskUpdate(BaseModel):
     status: str | None = None
     model_provider: str | None = Field(default=None, max_length=50)
     model_name: str | None = Field(default=None, max_length=100)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=32000)
     # Only used to reject project changes explicitly (MVP forbids it).
     project_id: uuid.UUID | None = None
 
@@ -36,5 +40,8 @@ class TaskRead(BaseModel):
     status: str
     model_provider: str | None
     model_name: str | None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    usage: dict | None = None
     created_at: datetime
     updated_at: datetime

@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.database import models  # noqa: F401  (register all tables)
+from app.api.deps import get_db_factory
 from app.infrastructure.database.session import get_db
 from app.main import create_app
 from app.modules.file import storage as storage_module
@@ -74,6 +75,19 @@ def test_storage_root() -> Iterator:
 
 
 @pytest.fixture()
+def test_data_root() -> Iterator[Path]:
+    """Isolated data directory for provider config tests (never relies on deletion)."""
+    root = (
+        Path(__file__).resolve().parents[1]
+        / ".test-artifacts"
+        / uuid.uuid4().hex
+        / "data"
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    yield root
+
+
+@pytest.fixture()
 def client(session_factory, workspace, test_storage_root, monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setattr(
         storage_module, "_storage", storage_module.LocalFileStorage(test_storage_root)
@@ -88,6 +102,7 @@ def client(session_factory, workspace, test_storage_root, monkeypatch) -> Iterat
             session.close()
 
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_db_factory] = lambda: session_factory
     # No context manager: lifespan is skipped so tests never touch the real database.
     yield TestClient(app)
 

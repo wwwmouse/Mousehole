@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.mixins import TimestampMixin
-from app.shared.db_types import UUIDType
+from app.shared.db_types import UUIDType, UsageJSON
 from app.shared.enums import TaskStatus
 
 
@@ -42,3 +42,8 @@ class Task(TimestampMixin, Base):
     )
     model_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Aggregated token usage of every chat message in this Task (sum of Message.usage).
+    usage: Mapped[dict | None] = mapped_column(UsageJSON, nullable=True)
+    # Optional model parameters; None means "use provider defaults".
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

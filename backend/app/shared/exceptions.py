@@ -57,3 +57,18 @@ class StorageError(AppError):
 class FileParseError(AppError):
     status_code = 422
     code = "file_parse_error"
+
+
+class ProviderNotConfiguredError(AppError):
+    status_code = 422
+    code = "provider_not_configured"
+
+
+class ModelRequiredError(AppError):
+    status_code = 422
+    code = "model_required"
+
+
+class ProviderError(AppError):
+    status_code = 502
+    code = "provider_error"
