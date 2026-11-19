@@ -1,0 +1,71 @@
+# ---------- 环境与密钥 ----------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+config.local.*
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+
+# ---------- Node / 前端 ----------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------- 应用数据与运行产物（本地优先，不入库） ----------
+data/
+storage/
+backend/data/
+backend/storage/
+logs/
+*.log
+*.sqlite3
+*.db
+
+# ---------- Docker 本地覆盖 ----------
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# ---------- 编辑器与操作系统 ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 测试与临时文件 ----------
+tmp/
+temp/
+.playwright/
+.nyc_output/
+*.pid
+
+# ---------- 本机 DSH 沙箱修复记录 ----------
+.dsh-acl-recovery/
