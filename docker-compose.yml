@@ -1,0 +1,23 @@
+name: mousehole
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mousehole-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mousehole}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mousehole}
+      POSTGRES_DB: ${POSTGRES_DB:-mousehole}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mousehole} -d ${POSTGRES_DB:-mousehole}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
