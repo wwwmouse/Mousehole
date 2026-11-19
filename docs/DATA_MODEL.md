@@ -49,7 +49,7 @@ DATA_MODEL 定义 mousehole 的核心业务实体及其关系，为后续数据�
 | 资源与成果层 | Artifact | 独立保存的工作成果 |
 | 能力配置层 | PromptTemplate | 可复用的 Prompt 模板 |
 
-其中，ExecutionStep 和 ExecutionFileSnapshot 是为了记录执行细节而设置的辅助实体。MVP 可以采用简单实现，不必过早构建复杂的执行编排系统。
+其中，ExecutionFileSnapshot 是记录执行实际使用文件的核心实体（P0）；ExecutionStep 用于记录执行细节，属于 P1，MVP 只预留表结构，不持久化细粒度步骤。
 
 ---
 
@@ -167,6 +167,8 @@ MVP 默认创建一个用户工作空间，不实现多用户或多租户机制�
 | title | String | 任务标题 |
 | description | Text | 任务目标或补充说明 |
 | status | Enum | active / completed / archived |
+| model_provider | String / Nullable | 当前使用的模型服务提供方；创建 Execution 前必须已选择 |
+| model_name | String / Nullable | 当前使用的模型名称；更换只影响之后新建的 Execution |
 | created_at | DateTime | 创建时间 |
 | updated_at | DateTime | 更新时间 |
 
@@ -178,6 +180,8 @@ MVP 默认创建一个用户工作空间，不实现多用户或多租户机制�
 - Task 可以拥有一个主 Conversation。
 - Task 可以拥有多次 Execution。
 - Task 可以拥有多个 ArtifactSeries。
+- Task 保存当前模型配置；更换模型不修改已完成 Execution 记录。
+- MVP 不允许变更 Task 的 project_id，创建后即固定（接口返回 422）。
 
 Task 是工作目标的容器，不等同于一次对话或一次执行。
 
@@ -247,9 +251,10 @@ Conversation 负责保存讨论上下文，不承担完整执行日志和成果�
 | id | ID | 主键 |
 | task_id | ID | 所属 Task |
 | sequence | Integer | Task 内执行序号 |
-| status | Enum | pending / running / succeeded / failed / cancelled |
+| status | Enum | pending / running / completed / failed / cancelled |
 | model_provider | String | 模型服务提供方 |
 | model_name | String | 使用的模型名称 |
+| usage | JSON / Nullable | Provider 返回的 Token 用量：prompt_tokens / completion_tokens / total_tokens；缺失时为空 |
 | started_at | DateTime | 开始时间 |
 | completed_at | DateTime / Nullable | 结束时间 |
 | input_summary | Text | 本次执行输入或目标摘要 |
@@ -265,12 +270,16 @@ Conversation 负责保存讨论上下文，不承担完整执行日志和成果�
 - Execution 不一定生成 Artifact。
 - 一次 Execution 可以产生多个 Artifact。
 - 普通对话不一定产生完整 Execution。
+- usage 仅在 Provider 返回时记录；缺失不影响执行结果，前端不得估算或伪造。
+- 应用重启时仍处于 running 的记录统一置为 failed，并在 error_message 说明中断原因。
 
-模型配置和调用参数可以在未来扩展为独立的执行配置或模型调用记录。MVP 先保留能够追溯模型提供方和模型名称的字段。
+模型配置和调用参数可以在未来扩展为独立的执行配置或模型调用记录。MVP 在 Task 上保存当前模型配置，并在 Execution 中记录实际使用的模型与 Token 用量。
 
-### 5.4 ExecutionStep
+### 5.4 ExecutionStep（P1）
 
 **定义：** Execution 内部的一项执行步骤，用于记录实际工作过程。
+
+> MVP 不持久化细粒度步骤：运行中的阶段进度通过 SSE 事件推送，执行完成后保存状态、时间、模型、输入摘要、错误与结果摘要即可。本实体为 P1，表结构可预留，但不属于 MVP 必交内容。
 
 | 字段 | 类型（逻辑） | 说明 |
 |---|---|---|
@@ -279,7 +288,7 @@ Conversation 负责保存讨论上下文，不承担完整执行日志和成果�
 | sequence | Integer | 步骤顺序 |
 | step_type | String | 步骤类型 |
 | name | String | 步骤名称 |
-| status | Enum | pending / running / succeeded / failed |
+| status | Enum | pending / running / completed / failed |
 | input_summary | Text / Nullable | 输入摘要 |
 | output_summary | Text / Nullable | 输出摘要 |
 | started_at | DateTime / Nullable | 开始时间 |
@@ -386,7 +395,7 @@ MVP 支持：
 5. 同一个 Task 对同一个 File 最多存在一条有效 override。
 6. include 表示额外加入文件；exclude 表示排除继承文件。
 7. 如果 File 已经属于 Project，Task 不需要重复建立 include 记录。
-8. 如果 Task 后续关联的 Project 发生变化，应重新计算可用上下文，并清理或校验不再适用的 override。
+8. MVP 不允许变更 Task 所属的 Project（project_id 创建后固定），因此 override 在 Task 生命周期内保持稳定；若未来允许变更，应重新计算可用上下文并清理或校验不再适用的 override。
 
 **可用文件集合的逻辑计算：**
 
@@ -580,7 +589,7 @@ MVP 实现：
 
 **定义：** 可复用的 Prompt 模板，为未来的个人能力库提供基础。
 
-MVP 只实现基础 Prompt 模板，不实现完整的 Skill、Workflow、Tool 或 MCP 能力管理。
+PromptTemplate 属于 P1：MVP 不实现模板管理与 CRUD，也不实现完整的 Skill、Workflow、Tool 或 MCP 能力管理。
 
 | 字段 | 类型（逻辑） | 说明 |
 |---|---|---|
@@ -615,7 +624,7 @@ mousehole 应避免用户删除某个实体时意外破坏其他实体的历史�
 | Task | 支持归档；历史 Execution 和 Artifact 保留 |
 | Conversation | 随 Task 生命周期管理 |
 | Message | 不单独删除历史消息，后续可扩展 |
-| File | 有引用时禁止直接物理删除 |
+| File | 有引用时返回 409 及引用列表；无引用时确认后软删除（status=deleted），永不物理删除 |
 | ProjectFile | 可删除关联，不删除 File |
 | TaskFileOverride | 可删除规则记录 |
 | Execution | 保留历史记录，不允许普通用户直接删除 |
@@ -628,9 +637,9 @@ mousehole 应避免用户删除某个实体时意外破坏其他实体的历史�
 MVP 文件删除策略：
 
 1. 用户请求删除 File 时，先检查是否仍被 Project 或 Task 引用。
-2. 存在引用时，提示用户先解除关联。
-3. 如果历史 Execution 使用过该文件，则不能破坏历史快照记录。
-4. 采用软删除或受控删除，避免直接删除底层文件导致历史记录失效。
+2. 存在引用时返回 `409` 并给出引用列表，用户需先解除关联。
+3. 无引用时，经用户确认后执行软删除：`File.status = deleted`，文件列表默认不再展示。
+4. 永不删除物理文件，也不删除历史 Execution 的快照；历史记录必须仍可追溯。
 
 ### 9.2 归档与删除的区别
 
@@ -650,8 +659,9 @@ Execution 应分别记录开始时间和完成时间，便于后续统计执行�
 
 ### 9.4 ID 与唯一性
 
-- 所有核心实体使用独立主键。
+- 所有核心实体使用独立主键，主键统一为 UUID v4（不使用自增整数，避免暴露数据数量与顺序）。
 - 不使用文件名、标题或显示名称作为实体唯一标识。
+- 枚举字段在数据库中以 `VARCHAR` + `CHECK` 约束存储，不使用 PostgreSQL 原生 enum，便于后续扩展取值。
 - Task 内 Execution 的 sequence 唯一。
 - Conversation 的 task_id 在 MVP 中唯一。
 - ProjectFile 的 project_id + file_id 唯一。
@@ -700,7 +710,7 @@ Task 不需要复制 Project 文件，也不需要在创建时固化文件列表
 3. 系统选择实际需要使用的文件。
 4. 系统读取和处理文件。
 5. 系统组织上下文并调用模型。
-6. 系统记录 Execution 和 ExecutionStep。
+6. 系统记录 Execution 状态、结果与实际使用文件快照（MVP 不持久化细粒度步骤）。
 7. 系统记录实际使用文件的 ExecutionFileSnapshot。
 8. 执行成功后，根据任务需要生成 Artifact。
 9. Conversation 保存用户与 AI 的交流结果。
@@ -740,8 +750,8 @@ MVP 通过内容哈希实现基础追溯。若未来要求完全重现历史执�
 
 - P0 表示核心闭环需要的能力。
 - P1 表示可以在核心闭环完成后实现的能力。
-- ExecutionStep 的数据结构可以提前预留，但 MVP 初期不必实现复杂步骤追踪。
-- PromptTemplate 可以后续加入，不影响多文档分析场景的核心闭环。
+- ExecutionStep 在 MVP 中不持久化（P1）：只预留表结构，运行阶段通过 SSE 实时事件展示，完成后展示结果摘要。
+- PromptTemplate 为 P1：MVP 不做模板 CRUD，Task 创建不强制选择模板，不影响多文档分析核心闭环。
 
 ---
 
@@ -803,7 +813,7 @@ mousehole 的核心数据模型围绕以下关系展开：
 
 **Workspace → Project → Task → Execution → Artifact**
 
-同时由 Conversation 承载持续交流，由 File Library 提供资料，由 PromptTemplate 提供基础可复用能力。
+同时由 Conversation 承载持续交流，由 File Library 提供资料；PromptTemplate 为后续能力库预留。
 
 其中最重要的设计边界是：
 

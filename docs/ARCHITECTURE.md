@@ -567,7 +567,7 @@ Running
 - 不假设它仍然正常运行。
 - 将其识别为异常中断。
 - 记录必要错误信息。
-- 标记为 Failed 或 Interrupted 对应的失败状态。
+- 统一标记为 Failed（不新增 Interrupted 状态），并在 error_message 中说明中断原因。
 - 保留原有 Execution 和已保存成果的历史记录。
 
 Pending 状态的任务可以继续由 Scheduler 调度。
@@ -576,7 +576,7 @@ MVP 不实现复杂的断点续跑。
 
 ---
 
-## 7. Execution Pipeline 与步骤记录
+## 7. Execution Pipeline 与阶段进度
 
 ### 7.1 Pipeline 阶段
 
@@ -592,24 +592,14 @@ MVP 不实现复杂的断点续跑。
 | 6 | Save Artifact | 保存成果并关联来源 |
 | 7 | Complete | 完成执行并更新状态 |
 
-### 7.2 ExecutionStep 记录策略
+### 7.2 阶段进度记录策略（MVP）
 
-MVP 持久化关键阶段的 ExecutionStep。
+MVP 不持久化细粒度 ExecutionStep（P1）。
 
-每个关键步骤记录：
-
-- 步骤名称。
-- 顺序。
-- 状态。
-- 开始时间。
-- 结束时间。
-- 必要的输入摘要。
-- 必要的输出摘要。
-- 错误信息。
-
-不要求每个内部函数调用都生成一条 ExecutionStep。
-
-详细调试日志与业务步骤记录分开管理。
+- 运行中的阶段进度通过 SSE 事件推送（`step.started` / `step.completed` / `step.failed`），前端据此展示 Pipeline 阶段进度。
+- Execution 完成后，持久化状态、开始与结束时间、实际使用的模型、输入摘要、错误信息和结果摘要，足以支撑历史列表与结果查看。
+- ExecutionStep 表结构可以预留，但不写入细粒度记录；完整步骤回放留待后续迭代。
+- 详细调试日志与业务结果分开管理，日志不得包含密钥或完整文件内容。
 
 ### 7.3 结果提交
 
@@ -851,9 +841,9 @@ GET /executions/{execution_id}/events
 |---|---|
 | execution.queued | 进入待执行队列 |
 | execution.started | 开始执行 |
-| step.started | 关键步骤开始 |
-| step.completed | 关键步骤完成 |
-| step.failed | 关键步骤失败 |
+| step.started | Pipeline 阶段开始 |
+| step.completed | Pipeline 阶段完成 |
+| step.failed | Pipeline 阶段失败 |
 | model.delta | 模型流式输出片段 |
 | execution.completed | 执行完成 |
 | execution.failed | 执行失败 |
@@ -871,7 +861,7 @@ MVP 不引入独立事件总线或完整 Event Sourcing 架构。
 
 事件主要通过进程内发布与订阅机制推送。
 
-PostgreSQL 中的 Execution 状态、ExecutionStep 和 Artifact 才是业务事实来源。
+PostgreSQL 中的 Execution 状态、ExecutionFileSnapshot 和 Artifact 才是业务事实来源；ExecutionStep 属于 P1，不作为 MVP 的事实来源。
 
 SSE 连接断开后：
 
@@ -1066,7 +1056,7 @@ Agent 可以提出架构优化建议，但不能未经批准直接：
 - 确定性 Execution Pipeline。
 - 轻量 Execution Scheduler。
 - 默认最多两个并发 Execution。
-- 关键 ExecutionStep 持久化。
+- Execution 状态持久化与阶段事件推送（ExecutionStep 细粒度记录为 P1）。
 - REST API + SSE。
 - 基本错误处理和异常恢复。
 - 模块级自动化测试。

@@ -248,6 +248,12 @@ PostgreSQL 的事务、约束、索引和关联查询能力能够满足当前业
 
 数据模型变更应通过迁移脚本完成，不允许直接修改生产数据库结构而不留下迁移记录。
 
+数据库落地约定：
+
+- 主键统一使用 UUID v4。
+- 枚举字段以 `VARCHAR` + `CHECK` 约束存储，不使用 PostgreSQL 原生 enum。
+- 时间统一以 UTC 存储，前端按用户本地时区展示。
+
 ### 6.4 未来扩展
 
 未来需要 RAG 时，可以在 PostgreSQL 基础上启用 pgvector。
@@ -300,7 +306,7 @@ PostgreSQL 的事务、约束、索引和关联查询能力能够满足当前业
 
 例如文件写入成功但数据库记录失败时，应能够清理未被引用的文件或识别异常状态。
 
-文件删除应检查 Project、Task 和历史 Execution 的引用关系，不能随意物理删除仍被历史记录引用的文件。
+文件删除应检查 Project、Task 和历史 Execution 的引用关系：有引用时返回 `409` 与引用列表；无引用时经用户确认后软删除（`status=deleted`）；永不物理删除文件与历史快照。
 
 ---
 
@@ -379,7 +385,7 @@ MVP 不设置系统默认模型。
 
 用户创建 Task 时选择具体 Provider 和模型。
 
-Task 保存当前模型配置。
+Task 保存当前模型配置（`model_provider` / `model_name`），创建 Execution 前必须已选择模型。
 
 用户可以在 Task 创建后更换模型，但更换只影响之后新建的 Execution，不修改已经完成的历史 Execution。
 
@@ -389,9 +395,15 @@ Task 保存当前模型配置。
 
 API Key 等敏感信息不能明文写入普通业务日志，也不能提交到 Git 仓库。
 
-MVP 应采用独立配置文件或适当的本地安全存储机制管理密钥，并通过 Docker 配置传递给后端。
+MVP 的密钥管理遵循面向用户的设计：
 
-密钥存储的具体实现将在架构设计阶段确定。
+- 密钥由后端统一管理，保存在本地受限配置文件 `data/provider_config.json`，仅本机可读、不入 Git。
+- 用户在 Application Settings 页面配置和修改密钥，不需要编辑任何本地文件。
+- 设置页默认掩码显示，用户主动点击后才显示明文；API 响应默认不返回明文密钥。
+- `.env` 只作为初始或兜底配置，不是用户日常修改入口。
+- 后端读取密钥后仅在调用 Provider 时使用，不得写入日志或错误信息。
+
+已知限制：MVP 的本地配置文件为明文存储（依赖本机文件权限），密钥加密或接入系统凭据管理器留待后续迭代。
 
 ### 9.6 数据传输边界
 
@@ -443,7 +455,7 @@ Execution 状态必须持久化。
 
 应用重启或后台执行进程异常退出时，应能够识别未正常结束的执行记录，并进行合理的异常状态处理。
 
-MVP 不要求实现复杂的断点续跑，但不能将异常中断的 Execution 永久显示为正常运行。
+MVP 不要求实现复杂的断点续跑，但不能将异常中断的 Execution 永久显示为正常运行：启动时发现仍为 Running 的记录，统一置为 Failed，并在 error_message 中标注 interrupted by restart，不新增状态。
 
 ### 10.4 执行记录
 
@@ -457,9 +469,10 @@ Execution 应记录：
 - 输入摘要。
 - 错误信息。
 - 实际使用的文件快照。
+- Provider 返回时的 Token 用量（usage）。
 - 生成的 Artifact 及其来源关系。
 
-具体步骤记录由 ExecutionStep 承担。
+MVP 不持久化细粒度执行步骤（P1）：运行阶段通过 SSE 推送进度，完成后保存状态与结果摘要；ExecutionStep 表结构预留但不写入细粒度记录。
 
 ---
 
@@ -675,6 +688,7 @@ Agent 必须遵守已经批准的产品规格、数据模型、技术决策和�
 - PDF、Markdown、TXT 文件处理。
 - OpenAI、DeepSeek、Ollama Provider 接入。
 - Task 模型选择。
+- Application Settings 中的 Provider 配置与密钥管理。
 - 同步 API 响应与异步 Execution。
 - REST API + SSE。
 - Markdown Artifact 保存。
@@ -688,6 +702,8 @@ Agent 必须遵守已经批准的产品规格、数据模型、技术决策和�
 - 微服务架构。
 - Kubernetes。
 - 复杂任务队列系统。
+- ExecutionStep 细粒度步骤持久化与回放（P1）。
+- Prompt 模板管理与模板 CRUD（P1）。
 - 完整 RAG 和向量检索。
 - 多 Agent 协作系统。
 - 任意 Shell 执行。

@@ -44,8 +44,9 @@ mousehole 的界面应体现现代 AI 工作台的产品定位，同时吸收专
 - Home：全局工作台。
 - Projects：项目列表。
 - Library：Global Library。
-- Artifacts：成果入口。
 - Settings：应用级设置。
+
+Artifacts 不设独立的全局导航入口：成果按所属 Task 组织，从 Task 的 Artifacts Tab、Project 页面或首页「最近成果」进入。
 
 Task 不作为独立的全局一级导航入口，其主要入口来自首页最近任务、Project 页面和相关工作记录。
 
@@ -200,17 +201,13 @@ Task 是 mousehole MVP 最重要的工作界面。
 
 ### 5.1 整体结构
 
-Task 内部采用对话优先的布局。
+Task 内部采用对话优先的布局，提供三个平级 Tab：
 
-Conversation 是默认打开的主界面；Artifacts 和 Settings 与 Conversation 处于同级，可以通过顶部 Tab 或工作区导航切换。
+- **Chat**：对话内容、模型交互、Execution 状态与成果生成提示。
+- **Settings**：当前 Task 的文件上下文、模型等配置。
+- **Artifacts**：当前 Task 的成果系列与产出。
 
-建议结构：
-
-- Conversation
-- Artifacts
-- Settings
-
-Execution 进度和历史记录通过 Conversation 内的执行状态组件及相关入口查看，不需要成为默认打开的主界面。
+三个 Tab 平级，互不嵌套；Chat 是默认打开的主界面。Execution 进度通过 Chat 内的执行状态组件查看，不单独占用一级 Tab。
 
 ### 5.2 Task 顶部信息栏
 
@@ -225,9 +222,9 @@ Execution 进度和历史记录通过 Conversation 内的执行状态组件及�
 
 模型切换应影响后续模型调用，不得改变历史 Execution 已记录的模型信息。
 
-### 5.3 Conversation 页面
+### 5.3 Chat 页面（Conversation）
 
-Conversation 是 Task 的主要交互界面。
+Chat 是 Task 的主要交互界面，对应 Conversation 实体。
 
 布局和交互应接近成熟的 AI Chat 产品，但需要与 Task、Execution、Artifact 等实体保持关联。
 
@@ -251,7 +248,7 @@ Conversation 是 Task 的主要交互界面。
 
 ### 5.4 Artifacts 页面
 
-Artifacts 与 Conversation 平级，但不是 Task 默认展示页面。
+Artifacts 与 Chat、Settings 平级，但不是 Task 默认展示页面。
 
 该页面展示当前 Task 下的成果系列及其版本。
 
@@ -268,7 +265,7 @@ Artifact 不仅是消息附件，而是独立保存、可再次访问的成果�
 
 ### 5.5 Settings 页面
 
-Settings 与 Conversation、Artifacts 平级，用于查看和调整当前 Task 的具体配置。
+Settings 与 Chat、Artifacts 平级，用于查看和调整当前 Task 的具体配置。
 
 MVP 重点展示文件上下文。
 
@@ -318,11 +315,9 @@ Execution 是一次实际工作运行，应让用户理解当前运行状态、�
 
 状态展示应具有明确的视觉区分。
 
-### 6.2 关键步骤
+### 6.2 关键阶段进度
 
-Execution 运行时默认展示关键步骤及其状态。
-
-MVP 主要步骤包括：
+Execution 运行时展示 Pipeline 关键阶段的实时进度：
 
 1. Resolve Files：解析可用文件。
 2. Parse Documents：解析文档。
@@ -332,29 +327,19 @@ MVP 主要步骤包括：
 6. Save Artifact：保存成果。
 7. Complete：完成执行。
 
-具体步骤应与实际后端 Pipeline 对应。
+阶段进度来自后端 SSE 事件，状态包括 Pending / Running / Completed / Failed / Skipped（适用时）。
 
-步骤状态包括：
-- Pending
-- Running
-- Completed
-- Failed
-- Skipped（适用时）
+MVP 不持久化细粒度步骤：Execution 结束后只展示状态、结果摘要与错误信息，不提供逐步回放；完整步骤记录（ExecutionStep）属于 P1。
 
-默认仅展示关键步骤，避免大量底层信息干扰用户。
+### 6.3 运行信息与错误
 
-### 6.3 完整日志
+MVP 不持久化逐步执行日志，因此不提供历史日志回放。
 
-保留查看完整执行日志的入口。
+- 运行期间：通过执行状态组件展示当前阶段与简要进度。
+- 失败时：展示失败阶段、错误原因以及已完成和未完成的部分。
+- 不展示底层调试信息；任何情况下都不得泄露 API Key、密码等敏感凭证。
 
-默认收起，用户主动展开后查看更详细的信息，例如：
-- 步骤输入和输出摘要。
-- 模型调用相关信息。
-- 文件处理信息。
-- 错误详情。
-- 其他必要的调试信息。
-
-日志展示不得泄露 API Key、密码等敏感凭证。
+详细运行日志属于开发调试能力，不进入用户界面。
 
 ### 6.4 Execution 历史
 
@@ -367,7 +352,7 @@ Task 内可以查看历史 Execution 列表。
 - 开始时间和结束时间。
 - 生成的 Artifact 数量。
 
-点击历史 Execution 可以查看对应步骤、文件快照和结果。
+点击历史 Execution 可以查看状态、结果摘要、错误信息与实际使用文件快照；MVP 不展示逐步明细。
 
 ### 6.5 错误处理
 
@@ -375,17 +360,16 @@ Task 内可以查看历史 Execution 列表。
 
 Execution 失败时：
 - 明确展示 Failed 状态。
-- 指明失败阶段。
+- 指明失败发生在哪个 Pipeline 阶段。
 - 尽可能反馈具体错误原因。
-- 展示当前已经完成的步骤。
-- 展示尚未完成或失败的步骤。
+- 说明失败前的执行进度（基于当前状态，不要求逐步明细）。
 - 提供适当的重试入口。
 
 不得将失败的 Execution 显示为成功。
 
 不得在 Artifact 未成功保存时提示成果已经成功生成。
 
-部分步骤已经完成时，应如实保留已完成状态及相关记录。
+部分阶段已经完成时，应如实展示当前进度，不夸大也不隐瞒。
 
 之前成功生成的 Artifacts 不受后续 Execution 失败影响。
 
@@ -492,7 +476,7 @@ MVP 仅支持桌面浏览器使用。
 - 侧边栏能够正常展开和折叠。
 - 主内容区域不会因布局拥挤而难以阅读。
 - Task 对话和成果预览有足够的展示空间。
-- 文件列表、Execution 步骤和日志可以正常浏览。
+- 文件列表、Execution 状态与结果可以正常浏览。
 
 MVP 不要求完整的手机端适配，也不要求提供独立移动端应用。
 
@@ -502,13 +486,13 @@ MVP 不要求完整的手机端适配，也不要求提供独立移动端应用�
 |---|---|
 | Home | 问候语、日期、使用统计、最近 Project、Task、Artifact、新建任务 |
 | Projects | 项目列表、项目详情、项目文件、项目 Task、项目成果 |
-| Task / Conversation | 对话、模型交互、Artifact 生成提示、Execution 状态 |
+| Task / Chat | 对话、模型交互、Artifact 生成提示、Execution 状态 |
 | Task / Artifacts | 成果系列、版本列表、成果查看 |
-| Task / Settings | 项目继承文件、额外引用、排除文件 |
-| Execution Detail | 关键步骤、完整日志、状态、错误、实际使用文件 |
+| Task / Settings | 项目继承文件、额外引用、排除文件、模型 |
+| Execution Detail | 状态、实时阶段进度、结果摘要、错误、实际使用文件 |
 | Global Library | 上传、搜索、文件列表、基本管理 |
 | Artifact Detail | Markdown 预览、版本和来源信息 |
-| Application Settings | 模型 Provider 配置及必要的应用配置 |
+| Application Settings | 模型 Provider 配置（含已配置密钥的掩码查看与编辑）及必要的应用配置 |
 
 ## 12. 暂不实现的 UI 功能
 
@@ -519,6 +503,7 @@ MVP 暂不要求：
 - 自定义 Dashboard 布局。
 - 高级数据分析和可视化面板。
 - Execution 流程图编辑器。
+- Execution 细粒度步骤持久化与历史日志回放（P1）。
 - Agent Builder。
 - Workflow 可视化编排。
 - Artifact 版本差异比较。

@@ -61,7 +61,6 @@ MVP 必须建立以下核心能力：
 - Conversation
 - Execution
 - Artifact
-- 基础 Prompt 模板
 - AI Model 接入
 
 ### 2.2 首个业务场景
@@ -123,7 +122,6 @@ Task 不等于 Conversation。
 - 设置标题和任务描述。
 - 关联 Project 或 Global Workspace。
 - 引用一份或多份 File。
-- 选择基础 Prompt 模板。
 - 启动 AI 执行。
 - 查看执行状态和结果。
 - 查看关联的 Conversation 和 Artifact。
@@ -141,7 +139,7 @@ Execution 用于记录：
 - 使用的模型。
 - 执行结果。
 - 错误信息。
-- 基础执行日志。
+- 执行结果摘要。
 
 建议至少支持：
 
@@ -239,6 +237,7 @@ MVP 至少支持：
 **P1：**
 
 - 重新执行。
+- 选择基础 Prompt 模板。
 - 更灵活的任务上下文配置。
 - Task 之间的关联。
 
@@ -291,9 +290,9 @@ MVP 至少支持：
 
 **P1：**
 
-- 更详细的步骤追踪。
+- 更详细的步骤追踪（ExecutionStep 持久化与回放）。
 - 重试策略。
-- Token 用量和成本统计。
+- Token 用量和成本统计（MVP 已记录 Provider 返回的 usage，统计报表为 P1）。
 
 ### 4.7 Artifact
 
@@ -324,9 +323,11 @@ MVP 至少支持：
 
 ### 4.9 Capability
 
-MVP 只需要基础 Prompt 模板机制。
+基础 Prompt 模板机制属于 P1，不是 MVP 必交内容。
 
-建议提供少量初始模板：
+MVP 中 Task 使用内置系统提示词完成任务执行，不强制选择模板；模板选择与模板 CRUD 留待后续迭代。
+
+后续建议提供少量初始模板：
 
 - 技术文档分析。
 - 多文档综合总结。
@@ -576,14 +577,14 @@ MVP 不是以页面数量或代码规模验收，而是以端到端工作闭环�
 | 阶段 | 文档 | 目标 |
 |---|---|---|
 | 1 | MVP_SPEC.md | 已完成，确定做什么 |
-| 2 | DATA_MODEL.md | 确定核心实体、字段和关系 |
-| 3 | TECHNICAL_DECISIONS.md | 确定技术栈与关键技术选择 |
-| 4 | ARCHITECTURE.md | 确定模块边界和系统架构 |
-| 5 | UI_SPEC.md | 确定页面结构与核心交互 |
-| 6 | DEVELOPMENT_PLAN.md | 确定开发顺序和验收计划 |
-| 7 | AGENTS.md | 给开发 Agent 提供项目级约束 |
+| 2 | DATA_MODEL.md | 已完成（v0.1），确定核心实体、字段和关系 |
+| 3 | TECHNICAL_DECISIONS.md | 已完成（v0.1），确定技术栈与关键技术选择 |
+| 4 | ARCHITECTURE.md | 已完成（v0.1），确定模块边界和系统架构 |
+| 5 | UI_SPEC.md | 已完成（v0.1），确定页面结构与核心交互 |
+| 6 | DEVELOPMENT_PLAN.md | 已完成（v0.1），确定开发顺序和验收计划 |
+| 7 | AGENTS.md | 已完成，给开发 Agent 提供项目级约束 |
 
-完成后进行一次整体设计审查，再进入实际代码开发。
+以上设计文档已完成，实现级细节以各文档为准；进入实际代码开发前进行一次整体设计审查。
 
 ---
 

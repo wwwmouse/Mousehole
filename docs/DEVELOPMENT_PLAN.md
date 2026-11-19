@@ -80,7 +80,7 @@ MVP 开发压缩为四个 Phase。
 
 1. 实现 Conversation 和 Message 管理。
 2. 实现 Task 内的对话界面。
-3. 实现模型 Provider 配置。
+3. 实现模型 Provider 配置与密钥管理（设置页可编辑，默认掩码显示）。
 4. 实现 OpenAI、DeepSeek、Ollama Provider Adapter。
 5. 实现统一 Model Service。
 6. 实现流式模型响应。
@@ -105,7 +105,7 @@ MVP 开发压缩为四个 Phase。
 
 主要工作：
 
-1. 实现 Execution 和 ExecutionStep。
+1. 实现 Execution（含 ExecutionFileSnapshot）；ExecutionStep 为 P1，仅预留表结构。
 2. 实现 Execution Scheduler 和并发控制。
 3. 实现文件解析、上下文构建和模型调用 Pipeline。
 4. 实现可用上下文与实际输入上下文的区分。
@@ -127,7 +127,7 @@ MVP 开发压缩为四个 Phase。
 3. 创建关联 Project 的 Task。
 4. 调整 Task 可用文件上下文。
 5. 发起多文档分析。
-6. 查看 Execution 关键步骤和状态。
+6. 查看 Execution 状态、实时阶段进度与结果摘要。
 7. 获取 AI 分析结果。
 8. 生成并保存 Markdown Artifact。
 9. 查看 Artifact 版本及来源 Execution。
@@ -143,10 +143,10 @@ MVP 开发压缩为四个 Phase。
 
 1. 完善 Home Dashboard。
 2. 完善 Project 页面。
-3. 完善 Task Conversation、Artifacts 和 Settings 页面。
+3. 完善 Task 的 Chat、Settings 和 Artifacts 三个平级页面。
 4. 完善 Global Library。
 5. 完善 Artifact 查看和版本切换。
-6. 完善 Execution 进度、日志和错误展示。
+6. 完善 Execution 状态、实时阶段进度和错误展示。
 7. 完善全局导航、空状态、加载状态和操作反馈。
 8. 完善系统配置和异常处理。
 9. 执行完整业务闭环测试。
@@ -415,7 +415,7 @@ MVP 采用单分支开发，不引入复杂 Git Flow。
 
 - Workspace、Project 和 Task。
 - Conversation 和 Message。
-- Execution 及关键步骤记录。
+- Execution 状态与结果记录（ExecutionStep 为 P1）。
 - File 元数据及原始文件。
 - Execution 文件快照。
 - ArtifactSeries 和 Artifact。
@@ -464,8 +464,8 @@ MVP 以完整业务闭环为核心。
 
 - 复杂分析任务能够创建 Execution。
 - Execution 状态能够持久化。
-- 可以查看关键步骤。
-- 可以查看完整日志。
+- 可以查看 Execution 状态与实时阶段进度。
+- 可以查看结果摘要与失败阶段；MVP 不要求历史步骤与日志回放。
 - 可以记录实际使用的文件快照。
 - 失败时能够诚实反馈原因和进度。
 - 失败不能伪装为成功。
@@ -482,7 +482,7 @@ MVP 以完整业务闭环为核心。
 ### 7.7 体验与稳定性
 
 - Home、Project、Task、Library 和 Artifact 页面可正常使用。
-- Task 内 Conversation、Artifacts 和 Settings 的切换正常。
+- Task 内 Chat、Settings 和 Artifacts 三个平级 Tab 的切换正常。
 - 关键操作具有明确反馈。
 - 页面加载、空状态和错误状态合理。
 - 核心自动化测试通过。
