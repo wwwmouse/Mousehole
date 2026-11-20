@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**当前状态：Phase 1 开发中。** 设计文档已完成；后端工程、PostgreSQL 迁移、Workspace / Project / Task / File 与 Task 文件上下文 API、文档解析已可运行并附带自动化测试；前端工作台页面已实现并通过生产构建。Phase 1 验收（端到端人工检查）仍在收尾。
+**当前状态：Phase 2 已完成（已验收）。** Phase 1（工作空间/项目/任务/文件/解析）与 Phase 2（对话与模型接入：Conversation/Message、DeepSeek/OpenAI/Ollama、SSE 流式、Token usage、模型参数）均已实现并通过自动化测试与人工验收。下一步进入 **Phase 3：Execution 与 Artifact 核心闭环**。
 
 ---
 
@@ -186,13 +186,28 @@ npm run dev                        # http://localhost:5173（Vite 代理 /api �
 
 > 模型选择是 **按 Task 生效**（切换只影响之后的调用）；密钥保存在本机 `data/provider_config.json`，接口只返回掩码，不写入日志、不入 Git。
 
+## 已实现能力
+
+**Phase 1 — 工作组织与资料**
+- Workspace / Project / Task 的创建、编辑、归档、删除（三点菜单）
+- Global Library 文件上传（PDF / Markdown / TXT）、解析、内容预览、软删除与引用保护（409）
+- Project 文件关联；Task 文件上下文：项目继承 + 额外引用 + 排除
+
+**Phase 2 — 对话与模型接入**
+- Task 内 Chat：消息持久化、SSE 流式输出、错误反馈、停止生成
+- Conversation / Message 模型；Task 1:1 会话
+- Provider 配置（DeepSeek / OpenAI / Ollama），密钥本地保存、接口只返回掩码
+- 「测试连接」自动发现可用模型（DeepSeek 为 `deepseek-flash` / `deepseek-v4-pro`）
+- Task 级模型选择与 Temperature / Max tokens；Workspace 级默认参数
+- Token usage：Message 单次记录 → Task 累计 → Chat 顶部显示（Project 维度汇总统计留待后续版本）
+
 ## 开发路线
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
 | Phase 1 | 工程基础与核心数据管理（Workspace / Project / Task / File / 解析 / 继承规则） | 已完成（已验收） |
-| Phase 2 | Conversation 与模型接入（Provider、流式、模型选择、usage） | 开发完成（待人工验收） |
-| Phase 3 | Execution 与 Artifact 核心闭环（Pipeline、SSE、版本、快照） | 未开始 |
+| Phase 2 | Conversation 与模型接入（Provider、流式、模型选择、usage） | 已完成（已验收） |
+| Phase 3 | Execution 与 Artifact 核心闭环（Pipeline、SSE、版本、快照） | 下一步 |
 | Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、文档） | 未开始 |
 
 每个 Phase 结束后由用户人工验收，通过后进入下一阶段。开发过程遵循 [AGENTS.md](AGENTS.md)；Git 提交由用户负责。
