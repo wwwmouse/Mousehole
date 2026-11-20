@@ -38,6 +38,8 @@ def test_create_list_cancel_execution(client: TestClient, configured_model) -> N
     assert body["status"] == "pending"
     assert body["sequence"] == 1
     assert body["model_name"] == "deepseek-flash"
+    assert body["skill_id"] == "multi_doc_analysis"
+    assert body["skill_name"] == "多文档分析"
 
     listed = client.get(f"/api/v1/tasks/{task_id}/executions")
     assert listed.status_code == 200
@@ -56,6 +58,30 @@ def test_create_list_cancel_execution(client: TestClient, configured_model) -> N
 
     again = client.post(f"/api/v1/executions/{body['id']}/cancel")
     assert again.status_code == 409
+
+
+def test_skills_endpoint_and_selected_skill(
+    client: TestClient, configured_model
+) -> None:
+    skills = client.get("/api/v1/skills")
+    assert skills.status_code == 200
+    ids = {item["id"] for item in skills.json()}
+    assert {"multi_doc_analysis", "content_summary"} <= ids
+
+    task_id = _create_task(client)
+    created = client.post(
+        f"/api/v1/tasks/{task_id}/executions",
+        json={"skill_id": "content_summary"},
+    )
+    assert created.status_code == 202
+    assert created.json()["skill_id"] == "content_summary"
+    assert created.json()["skill_name"] == "内容摘要"
+
+    unknown = client.post(
+        f"/api/v1/tasks/{task_id}/executions",
+        json={"skill_id": "nope"},
+    )
+    assert unknown.status_code == 404
 
 
 def test_execution_events_stream_for_terminal_execution(

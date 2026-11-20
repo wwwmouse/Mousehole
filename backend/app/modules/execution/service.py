@@ -52,12 +52,16 @@ def create_execution(
     temperature: float | None = None,
     max_tokens: int | None = None,
     input_summary: str | None = None,
+    skill_id: str | None = None,
+    skill_name: str | None = None,
 ) -> Execution:
     execution = repository.create(
         session,
         task_id=task.id,
         sequence=repository.next_sequence(session, task.id),
         status=ExecutionStatus.PENDING.value,
+        skill_id=skill_id,
+        skill_name=skill_name,
         model_provider=model_provider,
         model_name=model_name,
         temperature=temperature,

@@ -44,6 +44,9 @@ class Execution(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=ExecutionStatus.PENDING.value
     )
+    # Skill snapshot (thin layer; code registry today, DB entity later).
+    skill_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    skill_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Model configuration snapshot for this execution (never rewritten later).
     model_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

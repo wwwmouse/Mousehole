@@ -128,6 +128,8 @@ def test_pipeline_direct_context_creates_artifact(db_session, session_factory, s
     execution, steps, snapshots, artifacts = _fresh(session_factory, execution.id)
     assert execution.status == "completed"
     assert execution.completed_at is not None
+    assert execution.skill_id == "multi_doc_analysis"
+    assert execution.skill_name == "多文档分析"
     assert execution.usage["total_tokens"] == 15
     assert [step.step_type for step in steps] == [
         "resolve_files",
@@ -144,6 +146,31 @@ def test_pipeline_direct_context_creates_artifact(db_session, session_factory, s
     assert len(artifacts) == 1
     assert artifacts[0].content == "报告内容"
     assert artifacts[0].version == 1
+
+
+def test_pipeline_uses_selected_skill(db_session, session_factory, scenario):
+    task, workspace, file = scenario
+    execution = execution_service.create_execution(
+        db_session,
+        task=task,
+        model_provider="deepseek",
+        model_name="deepseek-flash",
+        skill_id="content_summary",
+        skill_name="内容摘要",
+    )
+    db_session.commit()
+    calls: list = []
+    _run(execution.id, session_factory, _make_stream(calls))
+
+    execution, steps, snapshots, artifacts = _fresh(session_factory, execution.id)
+    assert execution.status == "completed"
+    assert execution.skill_id == "content_summary"
+    assert artifacts[0].title.endswith("内容摘要")
+    assert "总结" in calls[-1]["messages"][-1]["content"]
+    session = session_factory()
+    series = list(session.scalars(select(ArtifactSeries)))
+    session.close()
+    assert series[0].title.endswith("· 内容摘要")
 
 
 def test_pipeline_second_run_appends_version(db_session, session_factory, scenario):
@@ -166,7 +193,7 @@ def test_pipeline_second_run_appends_version(db_session, session_factory, scenar
     series = list(session.scalars(select(ArtifactSeries)))
     session.close()
     assert len(series) == 1
-    assert series[0].title.endswith("· 分析报告")
+    assert series[0].title.endswith("· 多文档分析")
 
 
 def test_pipeline_failure_is_explicit_and_creates_no_artifact(

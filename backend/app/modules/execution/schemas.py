@@ -41,6 +41,8 @@ class ExecutionRead(BaseModel):
     task_id: uuid.UUID
     sequence: int
     status: str
+    skill_id: str | None = None
+    skill_name: str | None = None
     model_provider: str | None
     model_name: str | None
     temperature: float | None
@@ -52,6 +54,10 @@ class ExecutionRead(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
+
+
+class ExecutionCreate(BaseModel):
+    skill_id: str | None = None
 
 
 class ExecutionDetail(ExecutionRead):

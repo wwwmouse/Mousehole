@@ -13,6 +13,7 @@ from app.modules.execution import repository as execution_repository
 from app.modules.execution import service as execution_service
 from app.modules.execution.events import event_bus
 from app.modules.execution.schemas import (
+    ExecutionCreate,
     ExecutionDetail,
     ExecutionRead,
     ExecutionSnapshotRead,
@@ -20,6 +21,7 @@ from app.modules.execution.schemas import (
 )
 from app.modules.execution.scheduler import scheduler
 from app.modules.model import service as model_service
+from app.modules.skill import registry as skill_registry
 from app.modules.task import service as task_service
 from app.modules.workspace.models import Workspace
 from app.shared.exceptions import ConflictError
@@ -38,8 +40,13 @@ def _sse(event: str, data: dict) -> str:
     response_model=ExecutionRead,
     status_code=202,
 )
-async def create_execution(task_id: uuid.UUID, db: DbSession) -> ExecutionRead:
+async def create_execution(
+    task_id: uuid.UUID,
+    db: DbSession,
+    payload: ExecutionCreate | None = None,
+) -> ExecutionRead:
     task = task_service.get_task(db, task_id)
+    skill = skill_registry.get_skill(payload.skill_id if payload else None)
     provider, model, _config = model_service.resolve_model(
         task.model_provider, task.model_name
     )
@@ -61,7 +68,9 @@ async def create_execution(task_id: uuid.UUID, db: DbSession) -> ExecutionRead:
         model_name=model,
         temperature=temperature,
         max_tokens=max_tokens,
-        input_summary=f"{task.title} · 多文档分析",
+        input_summary=f"{task.title} · {skill.name}",
+        skill_id=skill.id,
+        skill_name=skill.name,
     )
     db.commit()
     db.refresh(execution)

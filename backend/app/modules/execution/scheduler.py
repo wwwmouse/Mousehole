@@ -50,6 +50,11 @@ class ExecutionScheduler:
             for index in range(self.max_concurrency)
         ]
         self._started = True
+        logger.warning(
+            "execution scheduler started: %s workers, loop=%s",
+            self.max_concurrency,
+            id(asyncio.get_running_loop()),
+        )
 
     async def shutdown(self) -> None:
         for worker in self._workers:
@@ -76,8 +81,10 @@ class ExecutionScheduler:
 
     async def _worker(self, index: int) -> None:
         assert self._queue is not None
+        logger.warning("scheduler worker %s waiting", index)
         while True:
             execution_id = await self._queue.get()
+            logger.warning("scheduler worker %s picked %s", index, execution_id)
             try:
                 if self._session_factory is None:
                     continue

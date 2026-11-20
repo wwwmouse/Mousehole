@@ -13,7 +13,8 @@ from app.modules.context import service as context_service
 from app.modules.execution import repository
 from app.modules.execution import service as execution_service
 from app.modules.execution.events import event_bus
-from app.modules.execution.prompts import analysis_messages, summary_messages
+from app.modules.execution.prompts import summary_messages
+from app.modules.skill import registry as skill_registry
 from app.modules.model import service as model_service
 from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
@@ -163,7 +164,20 @@ async def run_execution(
 
         execution_service.mark_running(session, execution)
         session.commit()
-        _publish(execution_id, {"type": "execution.started", "status": "running"})
+        skill = skill_registry.get_skill(execution.skill_id)
+        if execution.skill_id is None:
+            execution.skill_id = skill.id
+            execution.skill_name = skill.name
+            session.flush()
+        _publish(
+            execution_id,
+            {
+                "type": "execution.started",
+                "status": "running",
+                "skill_id": skill.id,
+                "skill_name": skill.name,
+            },
+        )
 
         provider = execution.model_provider or task.model_provider or ""
         model = execution.model_name or task.model_name or ""
@@ -191,8 +205,12 @@ async def run_execution(
         _check_cancel(cancel_check, execution_id)
 
         # 3) build context (direct or two-stage summary; no embeddings/RAG)
-        start_step("build_context", "构建上下文")
         budget = builder.compute_budget(workspace, provider, model, max_tokens)
+        start_step(
+            "build_context",
+            "构建上下文",
+            input_summary=f"上下文预算 {budget} tokens",
+        )
         plan = builder.plan_context(texts, budget)
         if plan.mode == "summarized":
             summaries: list[str] = []
@@ -248,7 +266,7 @@ async def run_execution(
             execution_id,
             provider=provider,
             model=model,
-            messages=analysis_messages(task, context_text),
+            messages=skill_registry.render_messages(skill, task, context_text),
             temperature=temperature,
             max_tokens=max_tokens,
             cancel_check=cancel_check,
@@ -261,13 +279,13 @@ async def run_execution(
 
         # 5) generate artifact payload
         start_step("generate_artifact", "生成成果")
-        title = f"{task.title} 分析报告"
+        title = f"{task.title} · {skill.name}"
         finish_step(output_summary=title)
 
         # 6) save artifact (failure here must never be marked completed)
         start_step("save_artifact", "保存成果")
         series = artifact_service.get_or_create_series(
-            session, task, f"{task.title} · 分析报告"
+            session, task, f"{task.title} · {skill.name}"
         )
         artifact = artifact_service.append_artifact(
             session,
