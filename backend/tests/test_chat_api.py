@@ -90,7 +90,7 @@ def test_chat_uses_task_model_parameters(
         "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "hi"}
     ) as response:
         "".join(response.iter_text())
-    assert captured_params[-1] == {"temperature": None, "max_tokens": None}
+    assert captured_params[-1] == {"temperature": 0.7, "max_tokens": 4096}
 
     patched = client.patch(
         f"/api/v1/tasks/{task_id}",
@@ -117,6 +117,78 @@ def test_task_model_parameter_validation(client: TestClient) -> None:
         f"/api/v1/tasks/{task['id']}", json={"max_tokens": 0}
     )
     assert bad_tokens.status_code == 422
+
+
+def test_chat_message_lists_only_temporary_files(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+
+    async def capture_stream(provider, model, messages, **kwargs):
+        yield {"type": "delta", "text": "ok"}
+
+    monkeypatch.setattr(model_service, "stream_chat", capture_stream)
+
+    task_id = _create_task(client)
+    uploaded = client.post(
+        "/api/v1/files",
+        files={"file": ("temp.md", b"# temp", "text/markdown")},
+    ).json()
+    linked = client.post(
+        f"/api/v1/tasks/{task_id}/files",
+        json={"file_id": uploaded["id"], "action": "include"},
+    )
+    assert linked.status_code in (200, 201), linked.text
+
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "hi"}
+    ) as response:
+        "".join(response.iter_text())
+
+    stored = client.get(f"/api/v1/tasks/{task_id}/messages").json()["messages"]
+    files_meta = stored[0]["metadata"]["files"]
+    assert [item["filename"] for item in files_meta] == ["temp.md"]
+    assert files_meta[0]["source"] == "task_added"
+
+
+def test_chat_uses_selected_skill(client: TestClient, monkeypatch) -> None:
+    captured: list[list[dict]] = []
+
+    async def capture_stream(provider, model, messages, **kwargs):
+        captured.append(messages)
+        yield {"type": "delta", "text": "ok"}
+
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(model_service, "stream_chat", capture_stream)
+
+    task_id = _create_task(client)
+    skill = next(
+        item
+        for item in client.get("/api/v1/skills").json()
+        if item["name"] == "内容摘要"
+    )
+    with client.stream(
+        "POST",
+        f"/api/v1/tasks/{task_id}/messages",
+        json={"content": "总结一下", "skill_id": skill["id"]},
+    ) as response:
+        "".join(response.iter_text())
+
+    system = captured[-1][0]["content"]
+    assert "内容摘要" in system
+    assert "总结" in system
+
+    stored = client.get(f"/api/v1/tasks/{task_id}/messages").json()["messages"]
+    assert stored[0]["metadata"]["skill"]["name"] == "内容摘要"
+    assert stored[0]["metadata"]["files"] == []
+    assert stored[1]["metadata"]["tools"] == []
+    assert stored[1]["metadata"]["duration_ms"] >= 0
+
+    unknown = client.post(
+        f"/api/v1/tasks/{task_id}/messages",
+        json={"content": "hi", "skill_id": "00000000-0000-4000-8000-000000000000"},
+    )
+    assert unknown.status_code == 404
 
 
 def test_chat_falls_back_to_workspace_model_defaults(
@@ -165,6 +237,71 @@ def test_chat_error_does_not_fake_assistant_message(
     messages = client.get(f"/api/v1/tasks/{task_id}/messages").json()
     assert [item["role"] for item in messages["messages"]] == ["user"]
     assert messages["task_usage"] is None
+
+
+def test_chat_includes_available_files_in_context(
+    client: TestClient, monkeypatch
+) -> None:
+    captured: list[list[dict]] = []
+
+    async def capture_stream(provider, model, messages, **kwargs):
+        captured.append(messages)
+        yield {"type": "delta", "text": "看到了"}
+
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(model_service, "stream_chat", capture_stream)
+
+    project = client.post("/api/v1/projects", json={"name": "ctx"}).json()
+    upload = client.post(
+        "/api/v1/files",
+        files={
+            "file": (
+                "notes.md",
+                "# 资料\n\n项目继承的独特内容XYZ。".encode(),
+                "text/markdown",
+            )
+        },
+    ).json()
+    linked = client.post(
+        f"/api/v1/projects/{project['id']}/files",
+        json={"file_id": upload["id"]},
+    )
+    assert linked.status_code in (200, 201), linked.text
+    task = client.post(
+        "/api/v1/tasks",
+        json={"title": "ctx task", "project_id": project["id"]},
+    ).json()
+
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task['id']}/messages", json={"content": "文件里写了什么"}
+    ) as response:
+        "".join(response.iter_text())
+
+    system = captured[-1][0]["content"]
+    assert "notes.md" in system
+    assert "项目继承" in system
+    assert "独特内容XYZ" in system
+
+    stored = client.get(f"/api/v1/tasks/{task['id']}/messages").json()["messages"]
+    # Project-inherited files are context, not per-message attachments.
+    assert stored[0]["metadata"]["files"] == []
+
+
+def test_stream_heartbeat_emits_thinking() -> None:
+    import asyncio
+
+    from app.api.v1.chat import _stream_with_heartbeat
+
+    async def slow_stream():
+        await asyncio.sleep(2.2)
+        yield {"type": "delta", "text": "x"}
+
+    async def collect() -> list[dict]:
+        return [event async for event in _stream_with_heartbeat(slow_stream())]
+
+    events = asyncio.run(collect())
+    assert any(event["type"] == "thinking" for event in events)
+    assert events[-1] == {"type": "delta", "text": "x"}
 
 
 def _tool_call_complete(tool_name: str, arguments: dict):
@@ -237,6 +374,40 @@ def test_chat_tool_saves_artifact_with_chat_source(
 
     messages = client.get(f"/api/v1/tasks/{task_id}/messages").json()
     assert messages["messages"][-1]["content"] == "已完成。"
+    assistant_meta = messages["messages"][-1]["metadata"]
+    assert assistant_meta["tools"][0]["name"] == "save_artifact"
+    assert assistant_meta["tools"][0]["ok"] is True
+
+
+def test_chat_saves_artifact_when_model_omits_tool(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+
+    async def doc_stream(provider, model, messages, **kwargs):
+        yield {"type": "delta", "text": "这是文档内容。"}
+
+    monkeypatch.setattr(model_service, "stream_chat", doc_stream)
+    task_id = _create_task(client)
+
+    with client.stream(
+        "POST",
+        f"/api/v1/tasks/{task_id}/messages",
+        json={"content": "帮我写一份文档并保存为成果"},
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert "event: tool_result" in body
+    done_line = next(
+        line for line in body.splitlines() if "artifacts" in line and "message_id" in line
+    )
+    payload = json.loads(done_line.split("data: ", 1)[1])
+    assert len(payload["artifacts"]) == 1
+
+    series = client.get(f"/api/v1/tasks/{task_id}/artifact-series").json()
+    detail = client.get(f"/api/v1/artifact-series/{series[0]['id']}").json()
+    assert detail["artifacts"][0]["content"] == "这是文档内容。"
+    assert detail["artifacts"][0]["source_type"] == "chat"
 
 
 def test_chat_tool_creates_execution(client: TestClient, monkeypatch) -> None:

@@ -50,6 +50,7 @@ def append_message(
     role: str,
     content: str,
     usage: dict | None = None,
+    metadata: dict | None = None,
 ) -> Message:
     message = repository.add_message(
         session,
@@ -58,6 +59,7 @@ def append_message(
         content=content,
         sequence=repository.next_sequence(session, conversation.id),
         usage=usage,
+        metadata=metadata,
     )
     session.flush()
     return message

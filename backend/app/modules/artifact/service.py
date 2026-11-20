@@ -71,6 +71,22 @@ def set_current_artifact(
     return series
 
 
+def delete_artifact(session: Session, artifact_id: uuid.UUID) -> None:
+    """Delete one version; keep other versions and move the current pointer."""
+    artifact = get_artifact(session, artifact_id)
+    series = get_series(session, artifact.series_id)
+    session.delete(artifact)
+    session.flush()
+    remaining = repository.list_artifacts(session, series.id)
+    if not remaining:
+        session.delete(series)
+        session.flush()
+        return
+    if series.current_artifact_id == artifact.id:
+        series.current_artifact_id = remaining[0].id
+    session.flush()
+
+
 def list_task_series(session: Session, task_id: uuid.UUID) -> list[ArtifactSeries]:
     return repository.list_series(session, task_id)
 

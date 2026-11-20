@@ -63,6 +63,10 @@ class Message(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     # Usage of the model call that produced this message (assistant messages only).
     usage: Mapped[dict | None] = mapped_column(UsageJSON, nullable=True)
+    # Per-message trace: skill/files used (user) or tool chain/duration (assistant).
+    message_metadata: Mapped[dict | None] = mapped_column(
+        "metadata", UsageJSON, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

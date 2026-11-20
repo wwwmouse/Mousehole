@@ -24,6 +24,7 @@ from app.modules.model import service as model_service
 from app.modules.skill import service as skill_service
 from app.modules.task import service as task_service
 from app.modules.workspace.models import Workspace
+from app.shared.defaults import DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
 from app.shared.exceptions import ConflictError
 
 router = APIRouter()
@@ -61,6 +62,10 @@ async def create_execution(
         if task.max_tokens is not None
         else (workspace.default_max_tokens if workspace else None)
     )
+    if temperature is None:
+        temperature = DEFAULT_TEMPERATURE
+    if max_tokens is None:
+        max_tokens = DEFAULT_MAX_TOKENS
     execution = execution_service.create_execution(
         db,
         task=task,

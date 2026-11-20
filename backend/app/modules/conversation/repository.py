@@ -50,6 +50,7 @@ def add_message(
     content: str,
     sequence: int,
     usage: dict | None = None,
+    metadata: dict | None = None,
 ) -> Message:
     message = Message(
         conversation_id=conversation_id,
@@ -57,6 +58,7 @@ def add_message(
         content=content,
         sequence=sequence,
         usage=usage,
+        message_metadata=metadata,
     )
     session.add(message)
     session.flush()
