@@ -41,6 +41,7 @@ interface ChatPayload {
   content: string
   provider?: string
   model?: string
+  skill_id?: string
 }
 
 function parseEvent(raw: string, handlers: ChatStreamHandlers): void {

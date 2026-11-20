@@ -7,6 +7,8 @@ import LoadingState from '@/components/LoadingState.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import Modal from '@/components/Modal.vue'
 import {
+  artifactDownloadUrl,
+  deleteArtifact,
   getArtifactSeries,
   listArtifactSeries,
   renameArtifactSeries,
@@ -29,6 +31,30 @@ const error = ref<string | null>(null)
 const renameOpen = ref(false)
 const renameDraft = ref('')
 const renaming = ref(false)
+
+const deleteTarget = ref<Artifact | null>(null)
+const deleting = ref(false)
+
+function downloadCurrent(): void {
+  if (!selectedArtifact.value) return
+  window.location.assign(artifactDownloadUrl(selectedArtifact.value.id))
+}
+
+async function confirmDeleteArtifact(): Promise<void> {
+  const target = deleteTarget.value
+  if (!target) return
+  deleting.value = true
+  try {
+    await deleteArtifact(target.id)
+    deleteTarget.value = null
+    app.notify('success', '成果已删除')
+    await loadSeries()
+  } catch (err) {
+    app.notifyError(err)
+  } finally {
+    deleting.value = false
+  }
+}
 
 const versions = computed(() => selected.value?.artifacts ?? [])
 
@@ -157,15 +183,48 @@ onMounted(() => {
               · {{ formatDateTime(selectedArtifact.created_at) }}
             </p>
           </div>
-          <button type="button" class="btn btn--ghost btn--sm" @click="openRename">
-            重命名系列
-          </button>
+          <div class="artifacts-preview__actions">
+            <button type="button" class="btn btn--ghost btn--sm" @click="openRename">
+              重命名系列
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" @click="downloadCurrent">
+              下载
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              @click="deleteTarget = selectedArtifact"
+            >
+              删除
+            </button>
+          </div>
         </header>
         <MarkdownText :text="selectedArtifact.content ?? ''" />
       </article>
 
       <p v-else class="artifacts-preview-empty">选择一个版本查看内容。</p>
     </div>
+
+    <Modal
+      :open="Boolean(deleteTarget)"
+      title="删除成果版本"
+      width="420px"
+      :dismissible="!deleting"
+      @close="deleteTarget = null"
+    >
+      <p class="artifacts-delete-copy">
+        删除「{{ deleteTarget?.title }} v{{ deleteTarget?.version }}」后不可恢复；
+        同系列其他版本不受影响。
+      </p>
+      <template #footer>
+        <button type="button" class="btn btn--ghost" :disabled="deleting" @click="deleteTarget = null">
+          取消
+        </button>
+        <button type="button" class="btn btn--primary" :disabled="deleting" @click="confirmDeleteArtifact">
+          删除
+        </button>
+      </template>
+    </Modal>
 
     <Modal
       :open="renameOpen"
@@ -291,6 +350,19 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
+}
+
+.artifacts-preview__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.artifacts-delete-copy {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 
 .artifacts-preview__meta {

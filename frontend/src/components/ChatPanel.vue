@@ -9,14 +9,10 @@ import ModelControls from '@/components/ModelControls.vue'
 import RunProgress from '@/components/RunProgress.vue'
 import { streamTaskChat } from '@/api/chat'
 import {
-  addTaskSkill,
-  createExecution,
   getTaskFiles,
   listSkills,
   listTaskMessages,
-  listTaskSkills,
   removeTaskFileOverride,
-  removeTaskSkill,
   updateTaskFile,
   uploadFile,
 } from '@/api/endpoints'
@@ -39,7 +35,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   'usage-updated': [usage: TaskUsage | null]
-  'open-artifacts': []
   'task-updated': [task: Task]
 }>()
 
@@ -62,17 +57,16 @@ const menuOpen = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const extraFiles = ref<TaskAvailableFile[]>([])
-const taskSkills = ref<Skill[]>([])
 const librarySkills = ref<Skill[]>([])
 const skillPickerOpen = ref(false)
-const selectedSkillId = ref('')
+const selectedSkill = ref<Skill | null>(null)
+const selectedSkillId = computed(() => selectedSkill.value?.id ?? '')
 const toolEvents = ref<
   { name: string; status: 'running' | 'ok' | 'error'; summary: string }[]
 >([])
-const toolOutputs = ref<{ artifacts: string[]; executions: string[] } | null>(null)
 const runRefreshKey = ref(0)
 const thinking = ref(false)
-const thinkingElapsed = ref(0)
+const elapsed = ref(0)
 let thinkingTimer: ReturnType<typeof setInterval> | null = null
 
 const TOOL_LABELS: Record<string, string> = {
@@ -82,9 +76,30 @@ const TOOL_LABELS: Record<string, string> = {
   create_execution: '启动执行',
 }
 
-const selectedSkill = computed(
-  () => taskSkills.value.find((item) => item.id === selectedSkillId.value) ?? null,
-)
+const SOURCE_LABELS: Record<string, string> = {
+  project_inherited: '项目继承',
+  task_added: '额外引用',
+  skill_asset: 'Skill 资料',
+}
+
+function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] ?? source
+}
+
+function messageTools(message: ChatMessage) {
+  return message.metadata?.tools ?? []
+}
+
+function messageFiles(message: ChatMessage) {
+  return message.metadata?.files ?? []
+}
+
+function chainDuration(message: ChatMessage): string {
+  const ms = message.metadata?.duration_ms
+  return ms && ms > 0 ? `${(ms / 1000).toFixed(1)}s` : ''
+}
+
+const selectedSkillLabel = computed(() => selectedSkill.value?.name ?? '')
 
 const usageLabel = (usage: TaskUsage | null): string | null =>
   usage?.total_tokens ? `${usage.total_tokens} tokens` : null
@@ -96,7 +111,14 @@ function toolLabel(name: string): string {
 async function scrollToBottom(): Promise<void> {
   await nextTick()
   const el = listRef.value
-  if (el) el.scrollTop = el.scrollHeight
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight
+  })
+  window.setTimeout(() => {
+    el.scrollTop = el.scrollHeight
+  }, 80)
 }
 
 async function load(): Promise<void> {
@@ -115,24 +137,14 @@ async function load(): Promise<void> {
   }
 }
 
-async function loadComposer(): Promise<void> {
+async function refreshExtraFiles(): Promise<void> {
   try {
-    const [context, skills] = await Promise.all([
-      getTaskFiles(props.taskId),
-      listTaskSkills(props.taskId),
-    ])
+    const context = await getTaskFiles(props.taskId)
     extraFiles.value = context.available.filter(
       (item) => item.source === 'task_added',
     )
-    taskSkills.value = skills
-    if (
-      selectedSkillId.value &&
-      !skills.some((item) => item.id === selectedSkillId.value)
-    ) {
-      selectedSkillId.value = ''
-    }
-  } catch (error) {
-    streamError.value = errorMessage(error)
+  } catch {
+    /* keep current chips */
   }
 }
 
@@ -145,7 +157,6 @@ function resizeInput(): void {
 
 function toggleMenu(): void {
   menuOpen.value = !menuOpen.value
-  if (menuOpen.value) void loadComposer()
 }
 
 function pickFile(): void {
@@ -165,7 +176,7 @@ async function onFileSelected(event: Event): Promise<void> {
       action: 'include',
     })
     app.notify('success', `已临时引用「${uploaded.filename}」`)
-    await loadComposer()
+    await refreshExtraFiles()
   } catch (error) {
     app.notifyError(error)
   } finally {
@@ -176,7 +187,9 @@ async function onFileSelected(event: Event): Promise<void> {
 async function removeExtra(item: TaskAvailableFile): Promise<void> {
   try {
     await removeTaskFileOverride(props.taskId, item.file.id)
-    await loadComposer()
+    extraFiles.value = extraFiles.value.filter(
+      (entry) => entry.file.id !== item.file.id,
+    )
   } catch (error) {
     app.notifyError(error)
   }
@@ -191,44 +204,14 @@ async function openSkillPicker(): Promise<void> {
   }
 }
 
-async function chooseSkill(skill: Skill): Promise<void> {
-  try {
-    if (!taskSkills.value.some((item) => item.id === skill.id)) {
-      await addTaskSkill(props.taskId, skill.id)
-      await loadComposer()
-      app.notify('success', `已引入 Skill「${skill.name}」`)
-    }
-    selectedSkillId.value = skill.id
-    skillPickerOpen.value = false
-    menuOpen.value = false
-  } catch (error) {
-    app.notifyError(error)
-  }
+function chooseSkill(skill: Skill): void {
+  selectedSkill.value = skill
+  skillPickerOpen.value = false
+  menuOpen.value = false
 }
 
-async function dropTaskSkill(skill: Skill): Promise<void> {
-  try {
-    await removeTaskSkill(props.taskId, skill.id)
-    if (selectedSkillId.value === skill.id) selectedSkillId.value = ''
-    await loadComposer()
-  } catch (error) {
-    app.notifyError(error)
-  }
-}
-
-async function runExecution(): Promise<void> {
-  if (!props.hasModel) {
-    app.notify('error', '尚未配置可用模型')
-    return
-  }
-  try {
-    await createExecution(props.taskId, selectedSkillId.value || undefined)
-    menuOpen.value = false
-    runRefreshKey.value += 1
-    app.notify('info', '已启动执行，可在对话上方查看工作进度')
-  } catch (error) {
-    app.notifyError(error)
-  }
+function clearSelectedSkill(): void {
+  selectedSkill.value = null
 }
 
 function goSkillLibrary(): void {
@@ -251,15 +234,27 @@ async function send(): Promise<void> {
   streamError.value = null
   streamText.value = ''
   toolEvents.value = []
-  toolOutputs.value = null
   thinking.value = false
-  thinkingElapsed.value = 0
+  elapsed.value = 0
   menuOpen.value = false
   if (thinkingTimer) clearInterval(thinkingTimer)
   thinkingTimer = setInterval(() => {
-    if (thinking.value) thinkingElapsed.value += 1
+    elapsed.value += 1
   }, 1000)
 
+  const pendingMetadata = {
+    skill: selectedSkill.value
+      ? { id: selectedSkill.value.id, name: selectedSkill.value.name }
+      : null,
+    files: extraFiles.value.map((item) => ({
+      filename: item.file.filename,
+      source: 'task_added',
+      status: 'included' as const,
+    })),
+  }
+  extraFiles.value = []
+  // 发送后清空输入栏的 Skill 选择（Task 引用仍保留，可在「+」中重新选择）
+  selectedSkill.value = null
   messages.value = [
     ...messages.value,
     {
@@ -269,6 +264,7 @@ async function send(): Promise<void> {
       content,
       sequence: 0,
       usage: null,
+      metadata: pendingMetadata,
       created_at: new Date().toISOString(),
     },
   ]
@@ -279,7 +275,7 @@ async function send(): Promise<void> {
   try {
     await streamTaskChat(
       props.taskId,
-      { content },
+      { content, skill_id: selectedSkillId.value || undefined },
       {
         onDelta: (text) => {
           thinking.value = false
@@ -314,16 +310,9 @@ async function send(): Promise<void> {
         onDone: (data) => {
           thinking.value = false
           taskUsage.value = data.task_usage as TaskUsage | null
-          if (data.executions.length) runRefreshKey.value += 1
-          if (data.artifacts.length || data.executions.length) {
-            toolOutputs.value = {
-              artifacts: data.artifacts,
-              executions: data.executions,
-            }
-            app.notify(
-              'success',
-              data.artifacts.length ? '已生成成果，可在 Artifacts 查看' : '已启动执行',
-            )
+          if (data.executions.length) {
+            runRefreshKey.value += 1
+            app.notify('info', '已启动执行')
           }
         },
       },
@@ -348,7 +337,9 @@ async function send(): Promise<void> {
     streamText.value = ''
     controller = null
     await load()
-    await loadComposer()
+    // 文件已作为 Task 可用上下文发送并写入本次消息上下文；
+    // 输入栏不再保留 chips（可在「+」菜单里管理 Task 引用）。
+    extraFiles.value = []
     if (failed) app.notify('error', '对话未完成，请查看错误信息')
   }
 }
@@ -358,7 +349,7 @@ function stop(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void send()
   }
@@ -373,7 +364,6 @@ function onClickOutside(event: MouseEvent): void {
 
 onMounted(() => {
   void load()
-  void loadComposer()
   document.addEventListener('click', onClickOutside)
 })
 
@@ -428,12 +418,64 @@ onBeforeUnmount(() => {
           class="chat-message"
           :class="`chat-message--${message.role}`"
         >
+          <details
+            v-if="message.role === 'assistant' && message.metadata"
+            class="thought-chain"
+          >
+            <summary class="thought-chain__summary">
+              <AppIcon name="sparkles" :size="11" />
+              思路链
+              <span v-if="messageTools(message).length">
+                · {{ messageTools(message).length }} 步
+              </span>
+              <span v-if="chainDuration(message)"> · {{ chainDuration(message) }}</span>
+            </summary>
+            <ol v-if="messageTools(message).length" class="thought-chain__list">
+              <li
+                v-for="(tool, index) in messageTools(message)"
+                :key="index"
+                class="thought-chain__item"
+              >
+                <span
+                  class="thought-chain__dot"
+                  :class="tool.ok ? 'thought-chain__dot--ok' : 'thought-chain__dot--fail'"
+                />
+                <span>{{ toolLabel(tool.name) }}</span>
+                <span v-if="tool.summary" class="thought-chain__detail">{{ tool.summary }}</span>
+              </li>
+            </ol>
+            <p v-else class="thought-chain__direct">直接回答，未调用工具。</p>
+          </details>
+
           <header class="chat-message__head">
             <span class="chat-message__role">{{ message.role === 'user' ? 'You' : 'Assistant' }}</span>
             <span v-if="usageLabel(message.usage)" class="chat-message__usage">
               {{ usageLabel(message.usage) }}
             </span>
           </header>
+          <div
+            v-if="
+              message.role === 'user' &&
+              (message.metadata?.skill || messageFiles(message).length)
+            "
+            class="message-attachments"
+          >
+            <span v-if="message.metadata?.skill" class="chip chip--skill">
+              <AppIcon name="sparkles" :size="11" />
+              {{ message.metadata.skill.name }}
+            </span>
+            <span
+              v-for="file in messageFiles(message)"
+              :key="file.filename"
+              class="chip chip--file"
+              :title="`${sourceLabel(file.source)}${file.status === 'skipped' ? '（超预算未展开）' : file.status === 'failed' ? '（读取失败）' : ''}`"
+            >
+              <AppIcon name="file" :size="11" />
+              {{ file.filename }}
+              <span class="chip__hint">{{ sourceLabel(file.source) }}</span>
+            </span>
+          </div>
+
           <div class="chat-message__body">
             <MarkdownText v-if="message.role === 'assistant'" :text="message.content" />
             <p v-else class="chat-message__text">{{ message.content }}</p>
@@ -443,13 +485,14 @@ onBeforeUnmount(() => {
         <article v-if="sending" class="chat-message chat-message--assistant">
           <header class="chat-message__head">
             <span class="chat-message__role">Assistant</span>
+            <span class="chat-message__usage">{{ elapsed }}s</span>
             <span class="spinner spinner--sm" aria-hidden="true" />
           </header>
           <details v-if="toolEvents.length || thinking" class="work-log" open>
             <summary class="work-log__summary">
               工作详情
-              <span v-if="thinking" class="work-log__thinking">
-                模型思考中… {{ thinkingElapsed }}s
+              <span class="work-log__thinking">
+                {{ thinking ? '模型思考中…' : '生成中…' }} {{ elapsed }}s
               </span>
             </summary>
             <ul v-if="toolEvents.length" class="tool-events">
@@ -478,27 +521,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <details v-if="toolEvents.length && !sending" class="work-log work-log--after" open>
-      <summary class="work-log__summary">上次工作详情</summary>
-      <ul class="tool-events">
-        <li v-for="(event, index) in toolEvents" :key="index" class="tool-event">
-          <span class="tool-event__dot" :class="`tool-event__dot--${event.status}`" />
-          <span>{{ toolLabel(event.name) }}</span>
-          <span v-if="event.summary" class="tool-event__summary">{{ event.summary }}</span>
-        </li>
-      </ul>
-    </details>
-
-    <div v-if="toolOutputs" class="tool-output">
-      <AppIcon name="file" :size="14" />
-      <span>
-        {{ toolOutputs.artifacts.length ? '已生成成果' : '已启动执行' }}
-      </span>
-      <button type="button" class="btn btn--ghost btn--sm" @click="emit('open-artifacts')">
-        查看 Artifacts
-      </button>
-    </div>
-
     <div class="composer">
       <div v-if="extraFiles.length || selectedSkill" class="composer__chips">
         <span v-for="item in extraFiles" :key="item.file.id" class="chip chip--file">
@@ -515,8 +537,13 @@ onBeforeUnmount(() => {
         </span>
         <span v-if="selectedSkill" class="chip chip--skill">
           <AppIcon name="sparkles" :size="11" />
-          {{ selectedSkill.name }}
-          <button type="button" class="chip__close" title="取消选择" @click="selectedSkillId = ''">
+          {{ selectedSkillLabel }}
+          <button
+            type="button"
+            class="chip__close"
+            title="取消选择"
+            @click="clearSelectedSkill()"
+          >
             <AppIcon name="close" :size="10" />
           </button>
         </span>
@@ -528,7 +555,7 @@ onBeforeUnmount(() => {
           v-model="input"
           class="composer__input"
           rows="2"
-          :placeholder="hasModel ? '输入消息…（Ctrl+Enter 发送）' : '请先配置模型'"
+          :placeholder="hasModel ? '输入消息…（Enter 发送，Shift+Enter 换行）' : '请先配置模型'"
           :disabled="sending"
           aria-label="对话输入框"
           @input="resizeInput"
@@ -539,7 +566,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="composer__plus"
-              title="添加文件 / 引用 Skill / 执行"
+              title="添加文件 / 引用 Skill"
               :disabled="sending"
               @click.stop="toggleMenu"
             >
@@ -553,15 +580,6 @@ onBeforeUnmount(() => {
               <button type="button" class="composer__menu-item" @click="openSkillPicker">
                 <AppIcon name="sparkles" :size="14" />
                 引用 Skill
-              </button>
-              <button
-                type="button"
-                class="composer__menu-item"
-                :disabled="!hasModel"
-                @click="runExecution"
-              >
-                <AppIcon name="send" :size="14" />
-                执行当前 Skill
               </button>
               <button type="button" class="composer__menu-item" @click="goSkillLibrary">
                 <AppIcon name="library" :size="14" />
@@ -608,34 +626,19 @@ onBeforeUnmount(() => {
             关闭
           </button>
         </header>
-        <p v-if="taskSkills.length" class="skill-picker__label">Task 已引用</p>
-        <ul v-if="taskSkills.length" class="skill-picker__list">
-          <li v-for="skill in taskSkills" :key="skill.id" class="skill-picker__row">
-            <button type="button" class="skill-picker__pick" @click="chooseSkill(skill)">
-              <span class="skill-picker__name">{{ skill.name }}</span>
-              <span class="skill-picker__desc">{{ skill.description }}</span>
-            </button>
-            <button type="button" class="btn btn--ghost btn--sm" @click="dropTaskSkill(skill)">
-              移除
-            </button>
-          </li>
-        </ul>
-        <p class="skill-picker__label">Skill Library</p>
+        <p class="skill-picker__label">从 Skill Library 选择（仅对下一条消息生效）</p>
         <ul class="skill-picker__list">
-          <li
-            v-for="skill in librarySkills.filter(
-              (item) => !taskSkills.some((ref) => ref.id === item.id),
-            )"
-            :key="skill.id"
-            class="skill-picker__row"
-          >
-            <button type="button" class="skill-picker__pick" @click="chooseSkill(skill)">
+          <li v-for="skill in librarySkills" :key="skill.id" class="skill-picker__row">
+            <button
+              type="button"
+              class="skill-picker__pick"
+              :class="{ 'skill-picker__pick--active': selectedSkillId === skill.id }"
+              @click="chooseSkill(skill)"
+            >
               <span class="skill-picker__name">{{ skill.name }}</span>
               <span class="skill-picker__desc">{{ skill.description }}</span>
             </button>
-            <button type="button" class="btn btn--ghost btn--sm" @click="chooseSkill(skill)">
-              引入
-            </button>
+            <span v-if="selectedSkillId === skill.id" class="chip chip--muted">已选</span>
           </li>
         </ul>
       </div>
@@ -750,6 +753,81 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
+.thought-chain {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.thought-chain__summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.thought-chain__list {
+  margin: 8px 0 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thought-chain__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.thought-chain__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.thought-chain__dot--ok {
+  background: var(--success);
+}
+
+.thought-chain__dot--fail {
+  background: var(--danger);
+}
+
+.thought-chain__detail {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thought-chain__direct {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.chip__hint {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
 .work-log {
   margin: 0 0 8px;
   padding: 6px 8px;
@@ -821,18 +899,6 @@ onBeforeUnmount(() => {
 
 .chat-error {
   margin: 0;
-}
-
-.tool-output {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 
 .composer {
@@ -1051,9 +1117,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.skill-picker__pick:hover {
-  border-color: var(--border);
-  background: var(--bg-hover);
+.skill-picker__pick:hover,
+.skill-picker__pick--active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 .skill-picker__name {

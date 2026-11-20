@@ -8,12 +8,13 @@ const props = withDefaults(
     max: number
     step?: number
     label: string
+    hint?: string
     unit?: string
     minLabel?: string
     maxLabel?: string
     format?: (value: number) => string
   }>(),
-  { step: 1, unit: '', minLabel: '', maxLabel: '' },
+  { step: 1, unit: '', minLabel: '', maxLabel: '', hint: '' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
@@ -139,7 +140,10 @@ onBeforeUnmount(() => {
 <template>
   <div class="pslider">
     <div class="pslider__head">
-      <span class="pslider__label">{{ label }}</span>
+      <div class="pslider__labels">
+        <span class="pslider__label">{{ label }}</span>
+        <span v-if="hint" class="pslider__hint">{{ hint }}</span>
+      </div>
       <span class="pslider__value">{{ display }}{{ unit }}</span>
     </div>
     <div
@@ -180,13 +184,28 @@ onBeforeUnmount(() => {
 
 .pslider__head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  font-size: 11.5px;
+  gap: 10px;
+}
+
+.pslider__labels {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .pslider__label {
-  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pslider__hint {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-faint);
 }
 
 .pslider__value {

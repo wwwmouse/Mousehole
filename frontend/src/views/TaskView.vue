@@ -528,7 +528,7 @@ onMounted(() => {
       </div>
 
       <!-- Chat -->
-      <section v-if="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
+      <section v-show="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
         <div class="card chat-card">
           <ChatPanel
             :task-id="task.id"
@@ -536,14 +536,13 @@ onMounted(() => {
             :task="task"
             :models="models"
             @usage-updated="onUsageUpdated"
-            @open-artifacts="activeTab = 'artifacts'"
             @task-updated="task = $event"
           />
         </div>
       </section>
 
       <!-- Settings -->
-      <section v-else-if="activeTab === 'settings'" role="tabpanel" class="tab-panel">
+      <section v-if="activeTab === 'settings'" role="tabpanel" class="tab-panel">
         <div class="notice">
           <AppIcon name="info" :size="15" />
           <span>可用文件不等于本次 Execution 实际读取的文件。这里展示的是 Task 的可用上下文，具体执行实际使用了哪些文件以 Execution 详情为准（Phase 2）。</span>
@@ -691,7 +690,7 @@ onMounted(() => {
       </section>
 
       <!-- Artifacts -->
-      <section v-else role="tabpanel" class="tab-panel">
+      <section v-if="activeTab === 'artifacts'" role="tabpanel" class="tab-panel">
         <TaskArtifacts :task-id="task.id" />
       </section>
 

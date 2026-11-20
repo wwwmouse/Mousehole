@@ -170,6 +170,34 @@ export interface TaskFileMutationPayload {
   action: FileOverrideAction
 }
 
+export interface MessageFileMeta {
+  filename: string
+  source: string
+  path?: string | null
+  status?: 'included' | 'skipped' | 'failed'
+  truncated?: boolean
+}
+
+export interface MessageSkillMeta {
+  id: string
+  name: string
+}
+
+export interface MessageToolMeta {
+  name: string
+  ok: boolean
+  summary: string
+}
+
+export interface ChatMessageMetadata {
+  skill?: MessageSkillMeta | null
+  files?: MessageFileMeta[]
+  tools?: MessageToolMeta[]
+  duration_ms?: number
+  artifacts?: number
+  executions?: number
+}
+
 export interface ChatMessage {
   id: string
   conversation_id: string
@@ -177,6 +205,7 @@ export interface ChatMessage {
   content: string
   sequence: number
   usage: TaskUsage | null
+  metadata?: ChatMessageMetadata | null
   created_at: string
 }
 

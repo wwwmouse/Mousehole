@@ -17,11 +17,11 @@ const open = ref(false)
 const saving = ref(false)
 const modelValue = ref('')
 const temperature = ref(0.7)
-const maxTokens = ref(2048)
+const maxTokens = ref(4096)
 const contextBudget = ref(32768)
 
 const DEFAULT_TEMPERATURE = 0.7
-const DEFAULT_MAX_TOKENS = 2048
+const DEFAULT_MAX_TOKENS = 4096
 const DEFAULT_CONTEXT_BUDGET = 32768
 
 const workspace = computed(() => app.currentWorkspace)
@@ -173,11 +173,11 @@ onBeforeUnmount(() => {
       <ParticleSlider
         v-model="maxTokens"
         label="Max tokens"
-        :min="256"
+        :min="512"
         :max="8192"
         :step="256"
         unit=""
-        min-label="256"
+        min-label="512"
         max-label="8192"
         @update:model-value="scheduleSave"
       />
@@ -191,9 +191,7 @@ onBeforeUnmount(() => {
         max-label="200k"
         @update:model-value="scheduleSave"
       />
-      <p class="model-controls__hint">
-        默认 {{ DEFAULT_TEMPERATURE }} / {{ DEFAULT_MAX_TOKENS }} tokens；预算按模型窗口自动计算，可在此覆盖。
-      </p>
+
     </div>
   </div>
 </template>

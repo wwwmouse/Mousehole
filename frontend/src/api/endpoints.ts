@@ -289,6 +289,16 @@ export function getArtifact(artifactId: string): Promise<Artifact> {
   return request<Artifact>(`/artifacts/${encodeURIComponent(artifactId)}`)
 }
 
+export function deleteArtifact(artifactId: string): Promise<void> {
+  return request<void>(`/artifacts/${encodeURIComponent(artifactId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function artifactDownloadUrl(artifactId: string): string {
+  return `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`
+}
+
 /* --------------------------------- providers --------------------------------- */
 
 export function listProviders(): Promise<Provider[]> {
