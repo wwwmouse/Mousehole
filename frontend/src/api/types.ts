@@ -245,11 +245,20 @@ export interface ExecutionSnapshot {
   used_at: string
 }
 
+export interface SkillInfo {
+  id: string
+  name: string
+  description: string
+  output_type: string
+}
+
 export interface Execution {
   id: string
   task_id: string
   sequence: number
   status: ExecutionStatus
+  skill_id: string | null
+  skill_name: string | null
   model_provider: string | null
   model_name: string | null
   temperature: number | null

@@ -3,7 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
+import ChatFilesPanel from '@/components/ChatFilesPanel.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
+import ChatSkillsPanel from '@/components/ChatSkillsPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ExecutionPanel from '@/components/ExecutionPanel.vue'
 import TaskArtifacts from '@/components/TaskArtifacts.vue'
@@ -67,6 +69,7 @@ const addingFiles = ref(false)
 const models = ref<ModelInfo[]>([])
 const modelSaving = ref(false)
 const selectedModel = ref('')
+const selectedSkillId = ref('')
 const temperatureDraft = ref('')
 const maxTokensDraft = ref('')
 const paramsSaving = ref(false)
@@ -529,17 +532,30 @@ onMounted(() => {
 
       <!-- Chat -->
       <section v-if="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
-        <ExecutionPanel
-          :task-id="task.id"
-          :has-model="models.length > 0"
-          @open-artifacts="activeTab = 'artifacts'"
-        />
-        <div class="card chat-card">
-          <ChatPanel
-            :task-id="task.id"
-            :has-model="models.length > 0"
-            @usage-updated="onUsageUpdated"
-          />
+        <div class="chat-layout">
+          <aside class="chat-sidebar">
+            <ChatFilesPanel
+              :task-id="task.id"
+              @switch-settings="activeTab = 'settings'"
+              @files-changed="loadFileContext"
+            />
+            <ChatSkillsPanel v-model="selectedSkillId" />
+          </aside>
+          <div class="chat-main">
+            <ExecutionPanel
+              :task-id="task.id"
+              :has-model="models.length > 0"
+              :skill-id="selectedSkillId"
+              @open-artifacts="activeTab = 'artifacts'"
+            />
+            <div class="card chat-card">
+              <ChatPanel
+                :task-id="task.id"
+                :has-model="models.length > 0"
+                @usage-updated="onUsageUpdated"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -935,6 +951,40 @@ onMounted(() => {
 
 .chat-panel {
   min-height: 420px;
+}
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-sidebar {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 .chat-card {

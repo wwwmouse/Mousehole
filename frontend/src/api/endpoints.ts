@@ -18,6 +18,7 @@ import type {
   Provider,
   ProviderTestResult,
   ProviderUpdate,
+  SkillInfo,
   Task,
   TaskFileContext,
   TaskFileMutationPayload,
@@ -149,10 +150,18 @@ export function listTaskMessages(taskId: string): Promise<TaskMessages> {
 
 /* -------------------------------- executions --------------------------------- */
 
-export function createExecution(taskId: string): Promise<Execution> {
+export function createExecution(
+  taskId: string,
+  skillId?: string,
+): Promise<Execution> {
   return request<Execution>(`/tasks/${encodeURIComponent(taskId)}/executions`, {
     method: 'POST',
+    json: skillId ? { skill_id: skillId } : undefined,
   })
+}
+
+export function listSkills(): Promise<SkillInfo[]> {
+  return request<SkillInfo[]>('/skills')
 }
 
 export function listExecutions(taskId: string): Promise<Execution[]> {

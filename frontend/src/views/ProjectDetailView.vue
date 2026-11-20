@@ -461,7 +461,7 @@ onMounted(() => {
           v-if="seriesList.length === 0"
           icon="file"
           title="项目还没有成果"
-          description="在项目内的 Task 中发起分析，生成的 Markdown 报告会汇总到这里。"
+          description="项目内 Task 执行 Skill 后产生的成果会汇总到这里。"
         />
         <ul v-else class="item-list">
           <li v-for="series in seriesList" :key="series.id">

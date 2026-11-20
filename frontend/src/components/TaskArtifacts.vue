@@ -108,7 +108,7 @@ onMounted(() => {
       v-else-if="seriesList.length === 0"
       icon="file"
       title="还没有成果"
-      description="在 Chat 页点击「发起分析」，执行成功后会在这里生成 Markdown 报告。"
+      description="在该 Task 中执行 Skill 后，产出的 Markdown 成果会出现在这里。"
     />
 
     <div v-else class="artifacts-layout">

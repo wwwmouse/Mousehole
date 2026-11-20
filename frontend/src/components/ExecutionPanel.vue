@@ -15,7 +15,7 @@ import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
 
-const props = defineProps<{ taskId: string; hasModel: boolean }>()
+const props = defineProps<{ taskId: string; hasModel: boolean; skillId?: string }>()
 const emit = defineEmits<{ 'open-artifacts': []; 'execution-changed': [] }>()
 
 const app = useAppStore()
@@ -76,7 +76,7 @@ async function start(): Promise<void> {
   error.value = null
   liveSteps.value = []
   try {
-    const execution = await createExecution(props.taskId)
+    const execution = await createExecution(props.taskId, props.skillId)
     executions.value = [execution, ...executions.value]
     await track(execution)
   } catch (err) {
@@ -171,9 +171,9 @@ onMounted(() => {
   <section class="card execution-panel">
     <header class="execution-panel__head">
       <div>
-        <h2 class="execution-panel__title">多文档分析</h2>
+        <h2 class="execution-panel__title">执行</h2>
         <p class="execution-panel__desc">
-          使用当前 Task 的可用文件发起一次可追溯的 Execution，产出 Markdown 报告。
+          使用当前 Task 的可用文件与所选 Skill 发起一次可追溯的 Execution。
         </p>
       </div>
       <div class="execution-panel__actions">
@@ -195,7 +195,7 @@ onMounted(() => {
         >
           <span v-if="starting" class="spinner spinner--sm" aria-hidden="true" />
           <AppIcon v-else name="sparkles" :size="14" />
-          发起分析
+          执行
         </button>
       </div>
     </header>
@@ -237,7 +237,8 @@ onMounted(() => {
           {{ statusLabel(latest.status) }}
         </span>
         <span class="execution-latest__meta">
-          #{{ latest.sequence }} · {{ latest.model_provider }} / {{ latest.model_name }}
+          #{{ latest.sequence }} · {{ latest.skill_name ?? '默认 Skill' }} ·
+          {{ latest.model_provider }} / {{ latest.model_name }}
         </span>
         <span v-if="latest.usage?.total_tokens" class="execution-latest__meta">
           {{ latest.usage.total_tokens }} tokens
