@@ -5,6 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ExecutionPanel from '@/components/ExecutionPanel.vue'
+import TaskArtifacts from '@/components/TaskArtifacts.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import FilePickerModal from '@/components/FilePickerModal.vue'
 import LoadingState from '@/components/LoadingState.vue'
@@ -423,6 +425,7 @@ watch(taskId, () => {
 })
 
 onMounted(() => {
+  if (route.query.tab === 'artifacts') activeTab.value = 'artifacts'
   void load()
   void loadProjects()
   void loadModels()
@@ -526,6 +529,11 @@ onMounted(() => {
 
       <!-- Chat -->
       <section v-if="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
+        <ExecutionPanel
+          :task-id="task.id"
+          :has-model="models.length > 0"
+          @open-artifacts="activeTab = 'artifacts'"
+        />
         <div class="card chat-card">
           <ChatPanel
             :task-id="task.id"
@@ -758,13 +766,7 @@ onMounted(() => {
 
       <!-- Artifacts -->
       <section v-else role="tabpanel" class="tab-panel">
-        <div class="card">
-          <EmptyState
-            icon="file"
-            title="Artifacts 将在 Phase 3 提供"
-            description="当前 Task 还没有成果数据。Artifact 系列、版本与来源 Execution 将在 Phase 3 展示。"
-          />
-        </div>
+        <TaskArtifacts :task-id="task.id" />
       </section>
 
       <FilePickerModal

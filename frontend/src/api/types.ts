@@ -14,6 +14,7 @@ export interface Workspace {
   description: string | null
   default_temperature: number | null
   default_max_tokens: number | null
+  context_budget_tokens: number | null
   created_at: string
   updated_at: string
 }
@@ -138,6 +139,7 @@ export interface UpdateWorkspacePayload {
   description?: string | null
   default_temperature?: number | null
   default_max_tokens?: number | null
+  context_budget_tokens?: number | null
 }
 
 export interface ProjectListQuery {
@@ -211,6 +213,86 @@ export interface ModelInfo {
   provider: string
   model: string
   label: string
+}
+
+export type ExecutionStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export interface ExecutionStep {
+  id: string
+  sequence: number
+  step_type: string
+  name: string
+  status: string
+  input_summary: string | null
+  output_summary: string | null
+  started_at: string | null
+  completed_at: string | null
+  error_message: string | null
+}
+
+export interface ExecutionSnapshot {
+  id: string
+  file_id: string
+  filename_snapshot: string
+  content_hash_snapshot: string
+  source_type: string
+  usage_mode: string
+  used_at: string
+}
+
+export interface Execution {
+  id: string
+  task_id: string
+  sequence: number
+  status: ExecutionStatus
+  model_provider: string | null
+  model_name: string | null
+  temperature: number | null
+  max_tokens: number | null
+  input_summary: string | null
+  error_message: string | null
+  error_code: string | null
+  usage: TaskUsage | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface ExecutionDetail extends Execution {
+  steps: ExecutionStep[]
+  snapshots: ExecutionSnapshot[]
+  artifact_ids: string[]
+}
+
+export interface ArtifactSeries {
+  id: string
+  task_id: string
+  title: string
+  description: string | null
+  current_artifact_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Artifact {
+  id: string
+  series_id: string
+  source_execution_id: string | null
+  version: number
+  title: string
+  content_type: string
+  content: string | null
+  storage_key: string | null
+  created_at: string
+}
+
+export interface ArtifactSeriesDetail extends ArtifactSeries {
+  artifacts: Artifact[]
 }
 
 /** Normalised backend error envelope: { error: { code, message, details } }. */

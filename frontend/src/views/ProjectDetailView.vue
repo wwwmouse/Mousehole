@@ -16,13 +16,14 @@ import {
   deleteProject,
   deleteTask,
   getProject,
+  listProjectArtifactSeries,
   listProjectFiles,
   listTasks,
   removeProjectFile,
   updateProject,
   updateTask,
 } from '@/api/endpoints'
-import type { FileItem, Project, ProjectFile, Task } from '@/api/types'
+import type { ArtifactSeries, FileItem, Project, ProjectFile, Task } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage, isNotFound } from '@/utils/errors'
 import { fileTypeLabel, formatBytes, formatDateTime, formatDate } from '@/utils/format'
@@ -38,6 +39,7 @@ const projectId = computed(() => String(route.params.id ?? ''))
 const project = ref<Project | null>(null)
 const files = ref<ProjectFile[]>([])
 const tasks = ref<Task[]>([])
+const seriesList = ref<ArtifactSeries[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
@@ -55,7 +57,7 @@ const removeBusy = ref(false)
 const tabItems = computed(() => [
   { key: 'tasks' as TabKey, label: 'Tasks', count: tasks.value.length },
   { key: 'files' as TabKey, label: 'Files', count: files.value.length },
-  { key: 'artifacts' as TabKey, label: 'Artifacts', count: null },
+  { key: 'artifacts' as TabKey, label: 'Artifacts', count: seriesList.value.length },
 ])
 
 const isArchived = computed(() => project.value?.status === 'archived')
@@ -73,14 +75,17 @@ async function load(): Promise<void> {
     return
   }
   try {
-    const [projectResult, fileResult, taskResult] = await Promise.all([
-      getProject(id),
-      listProjectFiles(id),
-      listTasks({ project_id: id, limit: 200 }),
-    ])
+    const [projectResult, fileResult, taskResult, seriesResult] =
+      await Promise.all([
+        getProject(id),
+        listProjectFiles(id),
+        listTasks({ project_id: id, limit: 200 }),
+        listProjectArtifactSeries(id),
+      ])
     project.value = projectResult
     files.value = fileResult
     tasks.value = taskResult
+    seriesList.value = seriesResult
   } catch (error) {
     if (isNotFound(error)) {
       notFound.value = true
@@ -164,6 +169,11 @@ async function confirmRemoveFile(): Promise<void> {
   } finally {
     removeBusy.value = false
   }
+}
+
+function taskTitle(taskId: string): string {
+  const found = tasks.value.find((item) => item.id === taskId)
+  return found?.title ?? '未知 Task'
 }
 
 function openTask(task: Task): void {
@@ -448,10 +458,36 @@ onMounted(() => {
 
       <section v-else role="tabpanel" class="tab-panel">
         <EmptyState
+          v-if="seriesList.length === 0"
           icon="file"
-          title="Artifacts 将在 Phase 3 提供"
-          description="项目相关的 AI 成果与版本将在这里展示；当前阶段没有可展示的成果数据。"
+          title="项目还没有成果"
+          description="在项目内的 Task 中发起分析，生成的 Markdown 报告会汇总到这里。"
         />
+        <ul v-else class="item-list">
+          <li v-for="series in seriesList" :key="series.id">
+            <button
+              type="button"
+              class="item-row"
+              @click="
+                router.push({
+                  name: 'task',
+                  params: { id: series.task_id },
+                  query: { tab: 'artifacts' },
+                })
+              "
+            >
+              <span class="item-row__icon"><AppIcon name="file" :size="15" /></span>
+              <span class="item-row__main">
+                <span class="item-row__title">{{ series.title }}</span>
+                <span class="item-row__meta">
+                  {{ taskTitle(series.task_id) }} · 更新于
+                  {{ formatDateTime(series.updated_at) }}
+                </span>
+              </span>
+              <AppIcon name="chevron-right" :size="15" class="item-row__chevron" />
+            </button>
+          </li>
+        </ul>
       </section>
 
       <FilePickerModal

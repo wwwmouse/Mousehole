@@ -24,6 +24,7 @@ const saveError = ref<string | null>(null)
 
 const defaultTemperatureDraft = ref('')
 const defaultMaxTokensDraft = ref('')
+const contextBudgetDraft = ref('')
 const savingDefaults = ref(false)
 
 const providers = ref<Provider[]>([])
@@ -61,6 +62,8 @@ watch(
       current?.default_temperature != null ? String(current.default_temperature) : ''
     defaultMaxTokensDraft.value =
       current?.default_max_tokens != null ? String(current.default_max_tokens) : ''
+    contextBudgetDraft.value =
+      current?.context_budget_tokens != null ? String(current.context_budget_tokens) : ''
     saveError.value = null
   },
   { immediate: true },
@@ -101,6 +104,10 @@ async function saveDefaults(): Promise<void> {
     defaultMaxTokensDraft.value.trim() === ''
       ? null
       : Number(defaultMaxTokensDraft.value)
+  const contextBudget =
+    contextBudgetDraft.value.trim() === ''
+      ? null
+      : Number(contextBudgetDraft.value)
   if (
     temperature !== null &&
     (Number.isNaN(temperature) || temperature < 0 || temperature > 2)
@@ -115,11 +122,19 @@ async function saveDefaults(): Promise<void> {
     app.notify('error', 'Max tokens 需为 1 到 32000 的整数')
     return
   }
+  if (
+    contextBudget !== null &&
+    (!Number.isInteger(contextBudget) || contextBudget < 2000 || contextBudget > 1000000)
+  ) {
+    app.notify('error', '上下文预算需为 2000 到 1000000 的整数')
+    return
+  }
   savingDefaults.value = true
   try {
     await updateWorkspace(current.id, {
       default_temperature: temperature,
       default_max_tokens: maxTokens,
+      context_budget_tokens: contextBudget,
     })
     await app.loadWorkspace(true)
     app.notify('success', '模型默认参数已保存')
@@ -313,6 +328,18 @@ onMounted(() => {
                 max="32000"
                 step="1"
                 placeholder="默认（留空）"
+              />
+            </label>
+            <label class="field">
+              <span class="field__label">上下文预算（tokens）</span>
+              <input
+                v-model="contextBudgetDraft"
+                class="input"
+                type="number"
+                min="2000"
+                max="1000000"
+                step="1000"
+                placeholder="自动（按模型窗口）"
               />
             </label>
             <button

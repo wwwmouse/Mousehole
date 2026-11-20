@@ -1,10 +1,15 @@
 import { request } from './client'
 import type {
+  Artifact,
+  ArtifactSeries,
+  ArtifactSeriesDetail,
   CreateProjectPayload,
   CreateTaskPayload,
   FileContent,
   FileDetail,
   FileItem,
+  Execution,
+  ExecutionDetail,
   FileListQuery,
   ModelInfo,
   Project,
@@ -140,6 +145,69 @@ export function removeTaskFileOverride(taskId: string, fileId: string): Promise<
 
 export function listTaskMessages(taskId: string): Promise<TaskMessages> {
   return request<TaskMessages>(`/tasks/${encodeURIComponent(taskId)}/messages`)
+}
+
+/* -------------------------------- executions --------------------------------- */
+
+export function createExecution(taskId: string): Promise<Execution> {
+  return request<Execution>(`/tasks/${encodeURIComponent(taskId)}/executions`, {
+    method: 'POST',
+  })
+}
+
+export function listExecutions(taskId: string): Promise<Execution[]> {
+  return request<Execution[]>(`/tasks/${encodeURIComponent(taskId)}/executions`)
+}
+
+export function getExecution(executionId: string): Promise<ExecutionDetail> {
+  return request<ExecutionDetail>(
+    `/executions/${encodeURIComponent(executionId)}`,
+  )
+}
+
+export function cancelExecution(executionId: string): Promise<Execution> {
+  return request<Execution>(
+    `/executions/${encodeURIComponent(executionId)}/cancel`,
+    { method: 'POST' },
+  )
+}
+
+/* --------------------------------- artifacts ---------------------------------- */
+
+export function listArtifactSeries(taskId: string): Promise<ArtifactSeries[]> {
+  return request<ArtifactSeries[]>(
+    `/tasks/${encodeURIComponent(taskId)}/artifact-series`,
+  )
+}
+
+export function listProjectArtifactSeries(
+  projectId: string,
+): Promise<ArtifactSeries[]> {
+  return request<ArtifactSeries[]>(
+    `/projects/${encodeURIComponent(projectId)}/artifact-series`,
+  )
+}
+
+export function getArtifactSeries(
+  seriesId: string,
+): Promise<ArtifactSeriesDetail> {
+  return request<ArtifactSeriesDetail>(
+    `/artifact-series/${encodeURIComponent(seriesId)}`,
+  )
+}
+
+export function renameArtifactSeries(
+  seriesId: string,
+  title: string,
+): Promise<ArtifactSeries> {
+  return request<ArtifactSeries>(
+    `/artifact-series/${encodeURIComponent(seriesId)}`,
+    { method: 'PATCH', json: { title } },
+  )
+}
+
+export function getArtifact(artifactId: string): Promise<Artifact> {
+  return request<Artifact>(`/artifacts/${encodeURIComponent(artifactId)}`)
 }
 
 /* --------------------------------- providers --------------------------------- */
