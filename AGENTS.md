@@ -9,8 +9,8 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：Phase 1（工作空间/项目/任务/文件/解析）与 Phase 2（对话与模型接入）已完成并验收。
-下一个交付点 = Phase 3「Execution 与 Artifact 核心闭环」。
+当前状态：Phase 1、Phase 2 已验收；Phase 3（Execution / Artifact 闭环 + Skill Library + Chat 受控工具 + 消息级追溯）已完成，待最终人工验收。
+下一个交付点 = Phase 4「完整 UI、系统集成与 MVP 验收」。
 
 ## 2. 开工前必读（按顺序）
 
@@ -42,6 +42,7 @@ MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 
 6. 前端不得直连数据库或模型供应商；所有业务规则在后端。
 7. API Key、完整文件内容、Prompt 全文不得写入日志；`.env`、`data/`、`storage/` 不入 Git。
 8. Execution 状态只能由 Execution Service 修改，前端只读。
+9. 模型可调用的工具必须走 TOOLS_SPEC allowlist 执行，禁止任意文件系统、Shell、外部写操作；系统提示里的工具说明必须从 TOOLS_SPEC 动态生成，不得硬编码。
 
 ## 5. 代码与工程约定
 

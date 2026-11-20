@@ -1107,3 +1107,38 @@ Agent 可以提出架构优化建议，但不能未经批准直接：
 如果实际实现发现架构存在问题，应提出变更建议，并同步更新相关设计文档。
 
 **架构的目的不是限制实现，而是让不同模块能够在明确边界内独立演进。**
+
+---
+
+## 17. Phase 3 实装补充：Skill、受控工具与消息追溯
+
+### 17.1 新增模块与职责
+
+| 模块 | 职责 |
+|---|---|
+| skill | Skill / SkillFile / TaskSkill 数据与服务；内置 seed；解析 Skill 供 Execution 使用 |
+| conversation/tools | 受控工具 allowlist：read_task_files / read_task_file / save_artifact / create_execution；_wrap 工厂生成 TOOLS_SPEC；tool_prompt() 动态渲染系统提示 |
+| conversation/chat_context | Chat 的文件/Skill 资料上下文：预算内节选、最近更新优先、显式列出清单 |
+
+### 17.2 Chat 数据流
+
+1. 消息进入 → 解析 Skill（可选）→ 构建文件/Skill 资料上下文（预算 12k tokens，单文件 8k 字符，按 updated_at 新→旧）；
+2. 工具 pre-pass（非流式，最多 4 轮）：模型调用工具 → 后端 allowlist 执行 → 结果回灌；
+3. 最终回答：不再带 tools，若模型泄漏 DSML/工具文本则重试一次，仍失败显式报错；
+4. 持久化 Message（含 usage 与 metadata）；Artifact 记录 `source_type=chat` + `source_message_id`。
+
+### 17.3 Execution 数据流（保持原架构）
+
+- Skill 解析 → Pipeline（解析文件 + Skill 资料 → 构建上下文 → 模型 → 保存 Artifact）→ Scheduler 状态机；
+- Execution 仍是内部工程实体，UI 不展示 Execution ID，仅以 Chat 内工作进度呈现。
+
+### 17.4 边界与一致性
+
+- 工具只能操作当前 Task 的可用文件/Artifact/Execution；无任意文件系统、Shell、外部写；
+- Execution 状态只由 Execution Service 修改；
+- 普通对话不创建 Execution；Artifact 独立于 Execution。
+
+### 17.5 验证
+
+- 后端 97 个自动化测试通过；前端构建通过；真实模型端到端覆盖分析、保存成果、工具读取、大文件分页与失败路径。
+

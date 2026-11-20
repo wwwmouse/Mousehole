@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from app.api.deps import DbSession
 from app.modules.artifact import service as artifact_service
@@ -74,3 +75,27 @@ def rename_series(
 @router.get("/artifacts/{artifact_id}", response_model=ArtifactRead)
 def get_artifact(artifact_id: uuid.UUID, db: DbSession) -> ArtifactRead:
     return ArtifactRead.model_validate(artifact_service.get_artifact(db, artifact_id))
+
+
+@router.get("/artifacts/{artifact_id}/download")
+def download_artifact(artifact_id: uuid.UUID, db: DbSession):
+    artifact = artifact_service.get_artifact(db, artifact_id)
+    filename = f"{artifact.title}.md"
+    encoded = quote(filename)
+    return Response(
+        content=(artifact.content or "").encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"artifact-{artifact.version}.md\"; "
+                f"filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.delete("/artifacts/{artifact_id}", status_code=204)
+def delete_artifact(artifact_id: uuid.UUID, db: DbSession) -> Response:
+    artifact_service.delete_artifact(db, artifact_id)
+    db.commit()
+    return Response(status_code=204)

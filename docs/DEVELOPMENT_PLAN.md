@@ -135,6 +135,71 @@ MVP 开发压缩为四个 Phase。
 
 这是 MVP 最重要的阶段，必须重点保障正确性和可追溯性。
 
+**Phase 3 实现决策（已确认）**
+
+- 上下文预算：按模型窗口自动推导（扣除输出与开销预留），未知模型回退 32k；可在 Workspace 覆盖。
+- 超预算：两阶段处理（分批 + 每批摘要 + 汇总），保留来源，不做无限递归。
+- 执行时**不自动携带**聊天历史，使用 Task 描述、固定结构化 Prompt 与文件上下文。
+- Artifact：固定 ArtifactSeries（首次自动命名，可改标题），每次执行生成单份 Markdown 报告，数据库内联存储，预留 storage_key。
+- 快照：只记录实际读取、处理并参与结果的源文件，并标注直接使用 / 已摘要。
+- 入口与展示：无独立执行面板；Chat 输入框「+」可引用临时文件/Skill，自然语言由模型判断是否调用受控工具；Execution 仅以 Chat 内「工作进度/运行详情」呈现。
+- 取消：支持协作式取消（Pending 直接取消，Running 在安全检查点停止）；取消不是失败。
+- 重试：仅网络、超时等临时错误自动重试一次。
+- 并发：默认 2；Execution 记录模型与参数快照；首页统计留到 Phase 4。
+- Context Service 仅做直接检索 + 文本解析 + 分批组织，**不引入 Embedding / 向量库**。
+- Execution 历史必须可回答：模型与配置、实际源文件、直接/摘要、关键步骤、产出 Artifact、失败位置。
+- 状态边界：Cancelled ≠ Failed；Artifact 保存失败不得标记 Completed。
+- 数据模型优先复用已有实体，仅补充无法表达的内容。
+
+**Phase 3.5 交互与能力层调整（已确认）**
+
+- 自然语言为主要入口：Chat 中由模型判断直接回答、保存成果或启动正式 Execution；保留快捷执行入口。
+- 受控工具调用：仅暴露 `read_task_files` / `read_task_file` / `save_artifact` / `create_execution`，只能操作当前 Task，无任意文件系统、Shell 或外部写权限；不支持工具调用的模型自动回退为普通流式对话。
+- 概念分离：普通对话不创建 Execution；简单成果可直接保存为 Artifact；多文档分析等正式任务仍由 Execution + Scheduler 管理。
+- 上下文规则：Execution 不自动携带聊天历史；"按用户明确指令把对话内容作为执行输入"仍待设计实现（当前仅记录 Execution 输入摘要）。
+- 统一成果管理：Artifact 增加 `source_type`（execution / chat）与 `source_message_id`，Chat 与 Execution 的成果共用 Artifact / ArtifactSeries 版本体系。
+- Skill Library：全局技能库（主界面导航，与 Library 并列），支持增删改查；Task 只能通过输入框「+」引用库中 Skill；Execution 记录 `skill_id/skill_name` 快照。
+- 输入框：「+」内收上传临时文件、引用 Skill、管理 Skill Library；模型选择与 Temperature / Max tokens / 上下文预算（粒子滑杆）在发送按钮左侧，默认值 0.7 / 4096 / 32768；Enter 发送、Shift+Enter 换行。
+- 未引入 Agent 框架、多 Agent、复杂权限系统或任意文件操作能力。
+
+**Phase 3.6 调整（已确认）**
+
+- Skill 不止文本 Prompt：`skill_files` 支持上传文件或文件夹（保留相对路径），执行时作为 `skill_asset` 纳入上下文与文件快照。
+- Execution 产品层级下调：Artifacts 页不再展示 Execution；Execution 仅作为内部工程实体，UI 以 Chat 内「工作进度 / 运行详情」呈现，且不展示 Execution ID。
+- Artifact 独立于 Execution：`source_execution_id` 为可选来源；Chat 成果通过 `source_type=chat` + `source_message_id` 追溯；正式多文档分析仍走 Execution + Scheduler + Pipeline。
+- 工具调用可见性：工具 pre-pass 期间发送 `thinking` 心跳；Chat 展示可折叠「工作详情」（工具调用、结果、思考耗时），避免"无输出"的卡死观感。
+- Chat 文件上下文：普通对话按预算把 Task 可用文件节选进上下文（默认 12k tokens / 单文件 8k 字符），并始终给出文件清单；模型因此可以"看到"项目继承与额外引用文件，完整内容仍通过 `read_task_file` 工具读取。
+- 生成计时：Chat 在思考与流式生成期间持续显示秒数，并在模型静默每 2 秒时收到 `thinking` 心跳（pre-pass 与流式两条路径都覆盖）。
+- 输入栏附件语义：临时文件加入 Task 可用上下文后，发送消息即清空输入栏 chips，避免"文件没有随消息发出"的误解；需要继续管理时从「+」菜单或 Task Settings 进入。
+- 消息级追溯：Message 增加 `metadata`（迁移 k1l2m3n4o5p6）；用户消息记录 Skill 与文件清单（含来源与预算状态），助手消息记录工具步骤与耗时；UI 在每条消息顶部展示默认折叠的「思路链」，替代原先的"上次工作详情"。
+- 模型参数面板仅保留属性名、数值与滑杆（不展示说明文字）。
+
+**Phase 3 完成状态（2026-11-20）**
+
+已交付：
+
+- Execution：状态机、Scheduler（并发 2 / FIFO / 启动恢复）、确定性 Pipeline、6 个关键阶段、快照、取消与失败边界。
+- 上下文：预算按模型窗口推导 + Workspace 覆盖；超预算两阶段摘要；Skill 资料（文件/文件夹）纳入快照。
+- Artifact：系列 + 版本递增、来源 execution / chat、消息级 source_message_id、下载/删除、Markdown 内联。
+- Skill Library：全局技能库（增删改查、文件/文件夹资料）、Execution 记录 Skill 快照。
+- Chat：受控工具（read_task_files / read_task_file / save_artifact / create_execution），schema 工厂 _wrap + 动态工具提示；思考心跳与计时；文件/Skill 按消息生效并记录在 Message.metadata；工作进度；默认折叠思路链。
+- 大文件：read_task_file 支持 offset/limit 分页；>2MB 不自动展开；上传上限 25MB。
+- 模型与参数：输入框内模型控件；显式默认值 0.7 / 4096 / 32768。
+
+验证：
+
+- 后端 97 passed（状态机、快照、Pipeline、Skill、工具、上下文排序、Artifact 下载/删除、消息 metadata 等）。
+- 前端 npm run build 通过。
+- 真实模型端到端：分析/摘要/保存成果、工具读取文件、大文件分页、错误路径。
+
+已知限制（留待 Phase 4 或后续）：
+
+- 对话历史无法清空；长历史会干扰模型。
+- >2MB 文件不能一次性进入上下文，只能分页/下载。
+- "按指令把对话内容作为 Execution 输入"未实现。
+- 工具调用依赖模型能力，Artifact 兜底仅覆盖明确"保存/导出"意图。
+- 无用户自定义 Skill/Workflow，Skill 仅代码/数据库基础字段。
+
 #### Phase 4：完整 UI、系统集成与 MVP 验收
 
 **目标：将核心能力整合成一个可以日常使用的本地 AI Workspace。**
@@ -279,7 +344,7 @@ MVP 开发压缩为四个 Phase。
 
 重点验证完整用户流程：
 
-创建 Project → 上传文件 → 创建 Task → 调整文件上下文 → 发起分析 → 查看执行状态 → 获取 Artifact → 重新访问历史成果。
+创建 Project → 上传文件 → 创建 Task → 调整文件上下文 → 选择 Skill / 自然语言发起执行 → 查看工作进度 → 获取 Artifact → 重新访问历史成果。
 
 前端组件测试按实际需要补充，优先保障核心交互。
 

@@ -197,6 +197,8 @@ Project 文件是项目内 Task 的默认可用上下文来源。
 
 ## 5. Task 工作区
 
+> 注：Phase 3 实装后的 Chat / Artifacts / Execution 展示以 §14 为准；本节描述保留为原始设计基线。
+
 Task 是 mousehole MVP 最重要的工作界面。
 
 ### 5.1 整体结构
@@ -301,6 +303,8 @@ Task Settings 展示的是可用上下文；具体 Execution 实际使用哪些�
 Global Workspace 中直接创建的 Task 不存在 Project 继承文件。
 
 ## 6. Execution 展示
+
+> 注：Phase 3 实装后 Execution 不再单独成栏，仅在 Chat 内以「工作进度/运行详情」呈现（见 §14.4）。
 
 Execution 是一次实际工作运行，应让用户理解当前运行状态、关键进度和最终结果。
 
@@ -520,4 +524,40 @@ MVP 暂不要求：
 - UI_SPEC.md：定义用户如何通过界面访问和操作这些能力。
 
 本文件定义交互结构和页面行为，不锁定具体组件库或 CSS 实现方式。
+
+---
+
+## 14. Phase 3 实装补充（当前界面）
+
+### 14.1 全局导航
+
+- 左侧导航新增 **Skills**（与 Home / Projects / Library / Settings 并列），进入全局 Skill Library；
+- Skill Library 支持新增、编辑、删除，编辑弹窗内可上传文件/文件夹作为 Skill 资料。
+
+### 14.2 Task Chat
+
+- Chat 为单一对话卡片，不再有独立文件/Skill 侧栏；
+- 输入框左下角「+」：上传临时文件、引用 Skill、管理 Skill Library；
+- Enter 发送，Shift+Enter 换行（IME 组合输入不误发）；
+- 输入框上方 chips：本次临时文件 + 选中的 Skill；发送后自动清空；
+- 模型与参数控件位于发送按钮左侧（模型选择 + Temperature / Max tokens / 上下文预算滑杆，默认 0.7 / 4096 / 32768）；
+- 助手消息顶部显示**默认折叠的「思路链」**（工具步骤、结果、耗时）；运行中显示工作进度与思考/生成计时；
+- Chat 内不展示 Artifact 入口或横幅。
+
+### 14.3 Artifacts 页面
+
+- 系列 / 版本列表 + Markdown 预览；
+- 支持下载 Markdown、删除单个版本、重命名系列；
+- 预览元数据显示来源：对话 / 运行 / 手动（不展示 Execution ID）。
+
+### 14.4 Execution 展示
+
+- 不单独设 Execution 栏或页面；
+- 仅在 Chat 内以「工作进度 / 运行详情」折叠面板展示状态、关键阶段、实际使用文件与错误。
+
+### 14.5 消息附件与来源
+
+- 每条用户消息显示本次临时引入的 Skill/文件 chips（不列项目继承文件）；
+- 每条助手消息显示其工具步骤与耗时（metadata），刷新后仍保留。
+
 

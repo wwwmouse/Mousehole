@@ -338,6 +338,8 @@ MVP 中 Task 使用内置系统提示词完成任务执行，不强制选择模�
 
 完整 Skill、Workflow、能力推荐和能力导入不属于 MVP 必须实现的内容。
 
+> Phase 3 实装补充：已提供**基础 Skill Library**（全局 Skill 增删改查、文件/文件夹资料、Chat 按消息引用）；完整的 Skill 生态、用户自定义 Workflow、能力市场仍不属于 MVP，留待后续阶段。
+
 ### 4.10 Integration
 
 **P0：**

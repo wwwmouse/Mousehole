@@ -827,3 +827,41 @@ mousehole 的核心数据模型围绕以下关系展开：
 这套模型首先服务于 MVP 的多文档技术资料分析场景，同时为后续扩展个人知识管理、代码仓库分析、RAG、Agent 和能力库保留空间。
 
 **设计目标不是一次性实现所有未来能力，而是确保第一版的数据结构不会妨碍产品沿着既定方向成长。**
+
+---
+
+## 15. Phase 3 实装补充（已落地）
+
+> 本节记录 Phase 3 实现相对原模型扩展的字段/表；均为增量扩展，不改变上文既有关系。与上文冲突时以本节为准。
+
+### 15.1 Skill / SkillFile / TaskSkill
+
+| 表 | 关键字段 | 说明 |
+|---|---|---|
+| skills | id UUID PK、code（唯一，内置用）、name（唯一）、description、system_prompt、instruction、output_type、is_builtin、created_at/updated_at | 全局 Skill Library；内置「多文档分析」「内容摘要」启动时 seed |
+| skill_files | (skill_id, file_id) 联合主键、path、created_at | Skill 资料附件；File 仍只存一份，文件夹以相对路径保存 |
+| task_skills | (task_id, skill_id) 联合主键、created_at | Task 引用库中 Skill；当前 Chat UI 按消息临时选择，该表保留给后续长期绑定 |
+
+### 15.2 Message.metadata
+
+- 类型 JSON，可为空；不保存完整 Prompt 或完整文件内容；
+- 用户消息：`{"skill": {id, name} | null, "files": [{filename, source, status, truncated}]}`；
+- 助手消息：`{"tools": [{name, ok, summary}], "duration_ms", "skill", "artifacts", "executions"}`；
+- 用于消息级追溯与默认折叠的「思路链」，不参与业务状态机。
+
+### 15.3 Artifact 来源扩展
+
+- 新增 `source_type`：`execution` / `chat` / `manual`（默认 execution）；
+- 新增 `source_message_id`：FK messages，ON DELETE SET NULL；
+- `source_execution_id` 仍可为空，Artifact 独立于 Execution 存在；
+- 删除单版本：保留其他版本；系列为空时删除系列；删除当前版本时 current_artifact_id 自动回退到最新剩余版本。
+
+### 15.4 Execution / Snapshot / Workspace 扩展
+
+- `executions.skill_id / skill_name`：执行使用的 Skill 快照（不随后续 Skill 修改变化）；
+- `execution_file_snapshots.source_type` 增加 `skill_asset`（Skill 资料参与上下文时记录）；
+- `workspaces.context_budget_tokens`：上下文预算覆盖（NULL = 按模型窗口自动推导）。
+
+### 15.5 Phase 3 迁移链
+
+`f6a7b8c9d0e1`（Execution/Artifact）→ `g7b8c9d0e1f2`（预算列修复）→ `h8c9d0e1f2a3`（Execution Skill 快照）→ `i9d0e1f2a3b4`（Skill Library / Artifact 来源）→ `j0e1f2a3b4c5`（Skill 文件 / skill_asset）→ `k1l2m3n4o5p6`（Message metadata）。
