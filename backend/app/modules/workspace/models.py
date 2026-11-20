@@ -22,3 +22,5 @@ class Workspace(TimestampMixin, Base):
     # Workspace-level model defaults; Task-level values override them.
     default_temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     default_max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Optional context budget override (tokens); None = auto from model window.
+    context_budget_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -11,6 +11,7 @@ class WorkspaceUpdate(BaseModel):
     description: str | None = None
     default_temperature: float | None = Field(default=None, ge=0, le=2)
     default_max_tokens: int | None = Field(default=None, ge=1, le=32000)
+    context_budget_tokens: int | None = Field(default=None, ge=2000, le=1000000)
 
 
 class WorkspaceRead(BaseModel):
@@ -21,5 +22,6 @@ class WorkspaceRead(BaseModel):
     description: str | None
     default_temperature: float | None = None
     default_max_tokens: int | None = None
+    context_budget_tokens: int | None = None
     created_at: datetime
     updated_at: datetime

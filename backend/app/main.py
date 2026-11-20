@@ -13,6 +13,9 @@ from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.infrastructure.database.session import dispose_engine, get_session_factory
+from app.modules.execution import repository as execution_repository
+from app.modules.execution import service as execution_service
+from app.modules.execution.scheduler import scheduler
 from app.modules.workspace.service import ensure_default_workspace
 from app.shared.exceptions import AppError
 
@@ -26,9 +29,21 @@ async def lifespan(app: FastAPI):
     try:
         with get_session_factory()() as session:
             ensure_default_workspace(session, settings.default_workspace_name)
+            recovered = execution_service.recover_interrupted(session)
+            pending_ids = execution_repository.list_pending_ids(session)
+        if recovered:
+            logger.warning("marked %s interrupted execution(s) as failed", recovered)
+        scheduler.configure(
+            session_factory=get_session_factory(),
+            max_concurrency=2,
+        )
+        await scheduler.start()
+        for execution_id in pending_ids:
+            await scheduler.enqueue(execution_id)
     except SQLAlchemyError as exc:  # migrations may not have run yet
         logger.warning("database not ready during startup: %s", exc)
     yield
+    await scheduler.shutdown()
 
 
 def create_app() -> FastAPI:

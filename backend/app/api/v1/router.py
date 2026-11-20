@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    artifacts,
     chat,
+    executions,
     files,
     health,
     models,
@@ -17,6 +19,8 @@ api_router.include_router(health.router, tags=["health"])
 api_router.include_router(providers.router, prefix="/providers", tags=["providers"])
 api_router.include_router(models.router, prefix="/models", tags=["models"])
 api_router.include_router(chat.router, prefix="/tasks", tags=["chat"])
+api_router.include_router(executions.router, tags=["executions"])
+api_router.include_router(artifacts.router, tags=["artifacts"])
 api_router.include_router(workspaces.router, prefix="/workspaces", tags=["workspaces"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])

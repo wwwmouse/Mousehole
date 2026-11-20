@@ -56,6 +56,7 @@ async def stream_openai(
                     body = await response.aread()
                     raise ProviderError(
                         f"模型服务返回错误（HTTP {response.status_code}）",
+                        transient=response.status_code >= 500,
                         details={"provider": config["name"], "body": _snippet(body)},
                     )
                 async for line in response.aiter_lines():
@@ -79,6 +80,7 @@ async def stream_openai(
     except httpx.HTTPError as exc:
         raise ProviderError(
             f"无法连接模型服务：{exc.__class__.__name__}",
+            transient=True,
             details={"provider": config["name"], "base_url": config["base_url"]},
         ) from exc
     if usage:
@@ -109,6 +111,7 @@ async def stream_ollama(
                     body = await response.aread()
                     raise ProviderError(
                         f"Ollama 返回错误（HTTP {response.status_code}）",
+                        transient=response.status_code >= 500,
                         details={"provider": "ollama", "body": _snippet(body)},
                     )
                 async for line in response.aiter_lines():
@@ -135,6 +138,7 @@ async def stream_ollama(
     except httpx.HTTPError as exc:
         raise ProviderError(
             f"无法连接 Ollama：{exc.__class__.__name__}",
+            transient=True,
             details={"provider": "ollama", "base_url": config["base_url"]},
         ) from exc
 

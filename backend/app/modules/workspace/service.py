@@ -48,6 +48,8 @@ def update_workspace(
         workspace.default_temperature = data["default_temperature"]
     if "default_max_tokens" in data:
         workspace.default_max_tokens = data["default_max_tokens"]
+    if "context_budget_tokens" in data:
+        workspace.context_budget_tokens = data["context_budget_tokens"]
     session.commit()
     session.refresh(workspace)
     return workspace

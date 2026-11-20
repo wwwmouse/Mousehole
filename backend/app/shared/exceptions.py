@@ -72,3 +72,7 @@ class ModelRequiredError(AppError):
 class ProviderError(AppError):
     status_code = 502
     code = "provider_error"
+
+    def __init__(self, message: str, *, transient: bool = False, **kwargs) -> None:
+        super().__init__(message, **kwargs)
+        self.transient = transient
