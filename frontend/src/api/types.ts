@@ -245,11 +245,33 @@ export interface ExecutionSnapshot {
   used_at: string
 }
 
-export interface SkillInfo {
+export interface Skill {
   id: string
+  code: string | null
   name: string
-  description: string
+  description: string | null
+  system_prompt: string
+  instruction: string
   output_type: string
+  is_builtin: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SkillFileInfo {
+  file_id: string
+  filename: string
+  file_type: string
+  size: number
+  path: string | null
+  created_at: string
+}
+
+export interface SkillPayload {
+  name: string
+  description?: string | null
+  instruction: string
+  system_prompt?: string | null
 }
 
 export interface Execution {
@@ -292,6 +314,8 @@ export interface Artifact {
   id: string
   series_id: string
   source_execution_id: string | null
+  source_type: string
+  source_message_id: string | null
   version: number
   title: string
   content_type: string

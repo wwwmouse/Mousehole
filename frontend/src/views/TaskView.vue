@@ -3,11 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
-import ChatFilesPanel from '@/components/ChatFilesPanel.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
-import ChatSkillsPanel from '@/components/ChatSkillsPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import ExecutionPanel from '@/components/ExecutionPanel.vue'
 import TaskArtifacts from '@/components/TaskArtifacts.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import FilePickerModal from '@/components/FilePickerModal.vue'
@@ -69,7 +66,7 @@ const addingFiles = ref(false)
 const models = ref<ModelInfo[]>([])
 const modelSaving = ref(false)
 const selectedModel = ref('')
-const selectedSkillId = ref('')
+
 const temperatureDraft = ref('')
 const maxTokensDraft = ref('')
 const paramsSaving = ref(false)
@@ -532,30 +529,16 @@ onMounted(() => {
 
       <!-- Chat -->
       <section v-if="activeTab === 'chat'" role="tabpanel" class="tab-panel chat-panel">
-        <div class="chat-layout">
-          <aside class="chat-sidebar">
-            <ChatFilesPanel
-              :task-id="task.id"
-              @switch-settings="activeTab = 'settings'"
-              @files-changed="loadFileContext"
-            />
-            <ChatSkillsPanel v-model="selectedSkillId" />
-          </aside>
-          <div class="chat-main">
-            <ExecutionPanel
-              :task-id="task.id"
-              :has-model="models.length > 0"
-              :skill-id="selectedSkillId"
-              @open-artifacts="activeTab = 'artifacts'"
-            />
-            <div class="card chat-card">
-              <ChatPanel
-                :task-id="task.id"
-                :has-model="models.length > 0"
-                @usage-updated="onUsageUpdated"
-              />
-            </div>
-          </div>
+        <div class="card chat-card">
+          <ChatPanel
+            :task-id="task.id"
+            :has-model="models.length > 0"
+            :task="task"
+            :models="models"
+            @usage-updated="onUsageUpdated"
+            @open-artifacts="activeTab = 'artifacts'"
+            @task-updated="task = $event"
+          />
         </div>
       </section>
 
@@ -704,79 +687,6 @@ onMounted(() => {
             </ul>
           </section>
 
-          <section class="card context-section">
-            <header class="context-head">
-              <div>
-                <h2 class="context-title">模型配置</h2>
-                <p class="context-desc">
-                  选择本 Task 使用的模型；未选择时使用已配置 Provider 的默认模型。
-                </p>
-              </div>
-              <span class="chip chip--muted">{{ modelLabel }}</span>
-            </header>
-            <div class="model-select">
-              <select
-                v-model="selectedModel"
-                class="select"
-                :disabled="modelSaving || models.length === 0"
-                @change="changeModel"
-              >
-                <option value="">使用默认模型</option>
-                <option
-                  v-for="item in models"
-                  :key="modelKey(item.provider, item.model)"
-                  :value="modelKey(item.provider, item.model)"
-                >
-                  {{ item.label }}
-                </option>
-              </select>
-              <span v-if="models.length === 0" class="model-select__hint">
-                还没有可用模型：请先在 Settings 中配置 Provider。
-              </span>
-              <span v-else class="model-select__hint">
-                切换只影响之后的对话与调用，不改动历史消息记录。
-              </span>
-            </div>
-
-            <div class="model-params">
-              <label class="field">
-                <span class="field__label">Temperature</span>
-                <input
-                  v-model="temperatureDraft"
-                  class="input"
-                  type="number"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  placeholder="默认（留空）"
-                />
-              </label>
-              <label class="field">
-                <span class="field__label">Max tokens</span>
-                <input
-                  v-model="maxTokensDraft"
-                  class="input"
-                  type="number"
-                  min="1"
-                  max="32000"
-                  step="1"
-                  placeholder="默认（留空）"
-                />
-              </label>
-              <button
-                type="button"
-                class="btn btn--ghost btn--sm"
-                :disabled="paramsSaving"
-                @click="saveModelParams"
-              >
-                <span v-if="paramsSaving" class="spinner spinner--sm" aria-hidden="true" />
-                保存参数
-              </button>
-            </div>
-            <p class="model-select__hint">
-              参数留空表示使用 Provider 默认值；保存后影响之后的所有调用。
-            </p>
-          </section>
         </template>
       </section>
 

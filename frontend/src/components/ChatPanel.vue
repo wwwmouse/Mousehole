@@ -1,19 +1,50 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
+import ModelControls from '@/components/ModelControls.vue'
+import RunProgress from '@/components/RunProgress.vue'
 import { streamTaskChat } from '@/api/chat'
-import { listTaskMessages } from '@/api/endpoints'
-import type { ChatMessage, TaskUsage } from '@/api/types'
+import {
+  addTaskSkill,
+  createExecution,
+  getTaskFiles,
+  listSkills,
+  listTaskMessages,
+  listTaskSkills,
+  removeTaskFileOverride,
+  removeTaskSkill,
+  updateTaskFile,
+  uploadFile,
+} from '@/api/endpoints'
+import type {
+  ChatMessage,
+  ModelInfo,
+  Skill,
+  Task,
+  TaskAvailableFile,
+  TaskUsage,
+} from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 
-const props = defineProps<{ taskId: string; hasModel: boolean }>()
-const emit = defineEmits<{ 'usage-updated': [usage: TaskUsage | null] }>()
+const props = defineProps<{
+  taskId: string
+  hasModel: boolean
+  task: Task
+  models: ModelInfo[]
+}>()
+const emit = defineEmits<{
+  'usage-updated': [usage: TaskUsage | null]
+  'open-artifacts': []
+  'task-updated': [task: Task]
+}>()
 
 const app = useAppStore()
+const router = useRouter()
 
 const messages = ref<ChatMessage[]>([])
 const taskUsage = ref<TaskUsage | null>(null)
@@ -27,9 +58,39 @@ const listRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 let controller: AbortController | null = null
 
-function usageLabel(usage: TaskUsage | null): string | null {
-  if (!usage?.total_tokens) return null
-  return `${usage.total_tokens} tokens`
+const menuOpen = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+const extraFiles = ref<TaskAvailableFile[]>([])
+const taskSkills = ref<Skill[]>([])
+const librarySkills = ref<Skill[]>([])
+const skillPickerOpen = ref(false)
+const selectedSkillId = ref('')
+const toolEvents = ref<
+  { name: string; status: 'running' | 'ok' | 'error'; summary: string }[]
+>([])
+const toolOutputs = ref<{ artifacts: string[]; executions: string[] } | null>(null)
+const runRefreshKey = ref(0)
+const thinking = ref(false)
+const thinkingElapsed = ref(0)
+let thinkingTimer: ReturnType<typeof setInterval> | null = null
+
+const TOOL_LABELS: Record<string, string> = {
+  read_task_files: '读取可用文件',
+  read_task_file: '读取文件内容',
+  save_artifact: '保存成果',
+  create_execution: '启动执行',
+}
+
+const selectedSkill = computed(
+  () => taskSkills.value.find((item) => item.id === selectedSkillId.value) ?? null,
+)
+
+const usageLabel = (usage: TaskUsage | null): string | null =>
+  usage?.total_tokens ? `${usage.total_tokens} tokens` : null
+
+function toolLabel(name: string): string {
+  return TOOL_LABELS[name] ?? name
 }
 
 async function scrollToBottom(): Promise<void> {
@@ -54,6 +115,27 @@ async function load(): Promise<void> {
   }
 }
 
+async function loadComposer(): Promise<void> {
+  try {
+    const [context, skills] = await Promise.all([
+      getTaskFiles(props.taskId),
+      listTaskSkills(props.taskId),
+    ])
+    extraFiles.value = context.available.filter(
+      (item) => item.source === 'task_added',
+    )
+    taskSkills.value = skills
+    if (
+      selectedSkillId.value &&
+      !skills.some((item) => item.id === selectedSkillId.value)
+    ) {
+      selectedSkillId.value = ''
+    }
+  } catch (error) {
+    streamError.value = errorMessage(error)
+  }
+}
+
 function resizeInput(): void {
   const el = inputRef.value
   if (!el) return
@@ -61,12 +143,105 @@ function resizeInput(): void {
   el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
+function toggleMenu(): void {
+  menuOpen.value = !menuOpen.value
+  if (menuOpen.value) void loadComposer()
+}
+
+function pickFile(): void {
+  fileInput.value?.click()
+}
+
+async function onFileSelected(event: Event): Promise<void> {
+  const inputEl = event.target as HTMLInputElement
+  const file = inputEl.files?.[0]
+  inputEl.value = ''
+  if (!file) return
+  uploading.value = true
+  try {
+    const uploaded = await uploadFile(file)
+    await updateTaskFile(props.taskId, {
+      file_id: uploaded.id,
+      action: 'include',
+    })
+    app.notify('success', `已临时引用「${uploaded.filename}」`)
+    await loadComposer()
+  } catch (error) {
+    app.notifyError(error)
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function removeExtra(item: TaskAvailableFile): Promise<void> {
+  try {
+    await removeTaskFileOverride(props.taskId, item.file.id)
+    await loadComposer()
+  } catch (error) {
+    app.notifyError(error)
+  }
+}
+
+async function openSkillPicker(): Promise<void> {
+  try {
+    librarySkills.value = await listSkills()
+    skillPickerOpen.value = true
+  } catch (error) {
+    app.notifyError(error)
+  }
+}
+
+async function chooseSkill(skill: Skill): Promise<void> {
+  try {
+    if (!taskSkills.value.some((item) => item.id === skill.id)) {
+      await addTaskSkill(props.taskId, skill.id)
+      await loadComposer()
+      app.notify('success', `已引入 Skill「${skill.name}」`)
+    }
+    selectedSkillId.value = skill.id
+    skillPickerOpen.value = false
+    menuOpen.value = false
+  } catch (error) {
+    app.notifyError(error)
+  }
+}
+
+async function dropTaskSkill(skill: Skill): Promise<void> {
+  try {
+    await removeTaskSkill(props.taskId, skill.id)
+    if (selectedSkillId.value === skill.id) selectedSkillId.value = ''
+    await loadComposer()
+  } catch (error) {
+    app.notifyError(error)
+  }
+}
+
+async function runExecution(): Promise<void> {
+  if (!props.hasModel) {
+    app.notify('error', '尚未配置可用模型')
+    return
+  }
+  try {
+    await createExecution(props.taskId, selectedSkillId.value || undefined)
+    menuOpen.value = false
+    runRefreshKey.value += 1
+    app.notify('info', '已启动执行，可在对话上方查看工作进度')
+  } catch (error) {
+    app.notifyError(error)
+  }
+}
+
+function goSkillLibrary(): void {
+  menuOpen.value = false
+  void router.push('/skills')
+}
+
 async function send(): Promise<void> {
   const content = input.value.trim()
   if (!content || sending.value) return
   if (!props.hasModel) {
     streamError.value =
-      '尚未配置可用模型：请先在 Settings 配置 DeepSeek API Key 或启用 Ollama，再在 Task Settings 选择模型。'
+      '尚未配置可用模型：请先在 Settings 配置 DeepSeek API Key 或启用 Ollama。'
     return
   }
 
@@ -75,6 +250,15 @@ async function send(): Promise<void> {
   sending.value = true
   streamError.value = null
   streamText.value = ''
+  toolEvents.value = []
+  toolOutputs.value = null
+  thinking.value = false
+  thinkingElapsed.value = 0
+  menuOpen.value = false
+  if (thinkingTimer) clearInterval(thinkingTimer)
+  thinkingTimer = setInterval(() => {
+    if (thinking.value) thinkingElapsed.value += 1
+  }, 1000)
 
   messages.value = [
     ...messages.value,
@@ -98,15 +282,49 @@ async function send(): Promise<void> {
       { content },
       {
         onDelta: (text) => {
+          thinking.value = false
           streamText.value += text
           void scrollToBottom()
+        },
+        onThinking: () => {
+          thinking.value = true
+          void scrollToBottom()
+        },
+        onToolCall: (call) => {
+          toolEvents.value.push({
+            name: call.name,
+            status: 'running',
+            summary: '',
+          })
+          void scrollToBottom()
+        },
+        onToolResult: (result) => {
+          const item = [...toolEvents.value]
+            .reverse()
+            .find((entry) => entry.name === result.name && entry.status === 'running')
+          if (item) {
+            item.status = result.ok ? 'ok' : 'error'
+            item.summary = result.summary
+          }
         },
         onError: (error) => {
           failed = true
           streamError.value = error.message
         },
         onDone: (data) => {
+          thinking.value = false
           taskUsage.value = data.task_usage as TaskUsage | null
+          if (data.executions.length) runRefreshKey.value += 1
+          if (data.artifacts.length || data.executions.length) {
+            toolOutputs.value = {
+              artifacts: data.artifacts,
+              executions: data.executions,
+            }
+            app.notify(
+              'success',
+              data.artifacts.length ? '已生成成果，可在 Artifacts 查看' : '已启动执行',
+            )
+          }
         },
       },
       controller.signal,
@@ -122,9 +340,15 @@ async function send(): Promise<void> {
     }
   } finally {
     sending.value = false
+    thinking.value = false
+    if (thinkingTimer) {
+      clearInterval(thinkingTimer)
+      thinkingTimer = null
+    }
     streamText.value = ''
     controller = null
     await load()
+    await loadComposer()
     if (failed) app.notify('error', '对话未完成，请查看错误信息')
   }
 }
@@ -140,8 +364,21 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onClickOutside(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.composer')) return
+  menuOpen.value = false
+  skillPickerOpen.value = false
+}
+
 onMounted(() => {
   void load()
+  void loadComposer()
+  document.addEventListener('click', onClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickOutside)
 })
 </script>
 
@@ -156,12 +393,11 @@ onMounted(() => {
       </span>
     </div>
 
+    <RunProgress :task-id="taskId" :refresh-key="runRefreshKey" />
+
     <div v-if="!hasModel" class="notice notice--warning">
       <AppIcon name="alert" :size="15" />
-      <span>
-        尚未配置可用模型：请先在 Settings 中配置 DeepSeek API Key 或启用 Ollama，然后在 Task 的
-        Settings 里选择模型。
-      </span>
+      <span>尚未配置可用模型：请先在 Settings 中配置 DeepSeek API Key 或启用 Ollama。</span>
     </div>
 
     <div ref="listRef" class="chat-thread">
@@ -180,7 +416,8 @@ onMounted(() => {
         <AppIcon name="sparkles" :size="22" />
         <p class="chat-empty__title">开始对话</p>
         <p class="chat-empty__desc">
-          普通聊天记录会保存到 Conversation；正式的多文档执行与 Artifact 将在 Phase 3 提供。
+          直接提问，或让 AI 读取 Task 文件、生成成果、启动正式执行。上传文件与引用 Skill
+          在输入框左下角的「+」里。
         </p>
       </div>
 
@@ -208,9 +445,26 @@ onMounted(() => {
             <span class="chat-message__role">Assistant</span>
             <span class="spinner spinner--sm" aria-hidden="true" />
           </header>
+          <details v-if="toolEvents.length || thinking" class="work-log" open>
+            <summary class="work-log__summary">
+              工作详情
+              <span v-if="thinking" class="work-log__thinking">
+                模型思考中… {{ thinkingElapsed }}s
+              </span>
+            </summary>
+            <ul v-if="toolEvents.length" class="tool-events">
+              <li v-for="(event, index) in toolEvents" :key="index" class="tool-event">
+                <span class="tool-event__dot" :class="`tool-event__dot--${event.status}`" />
+                <span>{{ toolLabel(event.name) }}</span>
+                <span v-if="event.summary" class="tool-event__summary">{{ event.summary }}</span>
+              </li>
+            </ul>
+          </details>
           <div class="chat-message__body">
             <MarkdownText v-if="streamText" :text="streamText" />
-            <p v-else class="chat-message__placeholder">正在生成…</p>
+            <p v-else class="chat-message__placeholder">
+              {{ toolEvents.length ? '正在调用工具…' : '正在生成…' }}
+            </p>
           </div>
         </article>
       </div>
@@ -224,7 +478,50 @@ onMounted(() => {
       </div>
     </div>
 
+    <details v-if="toolEvents.length && !sending" class="work-log work-log--after" open>
+      <summary class="work-log__summary">上次工作详情</summary>
+      <ul class="tool-events">
+        <li v-for="(event, index) in toolEvents" :key="index" class="tool-event">
+          <span class="tool-event__dot" :class="`tool-event__dot--${event.status}`" />
+          <span>{{ toolLabel(event.name) }}</span>
+          <span v-if="event.summary" class="tool-event__summary">{{ event.summary }}</span>
+        </li>
+      </ul>
+    </details>
+
+    <div v-if="toolOutputs" class="tool-output">
+      <AppIcon name="file" :size="14" />
+      <span>
+        {{ toolOutputs.artifacts.length ? '已生成成果' : '已启动执行' }}
+      </span>
+      <button type="button" class="btn btn--ghost btn--sm" @click="emit('open-artifacts')">
+        查看 Artifacts
+      </button>
+    </div>
+
     <div class="composer">
+      <div v-if="extraFiles.length || selectedSkill" class="composer__chips">
+        <span v-for="item in extraFiles" :key="item.file.id" class="chip chip--file">
+          <AppIcon name="file" :size="11" />
+          {{ item.file.filename }}
+          <button
+            type="button"
+            class="chip__close"
+            title="移除临时引用"
+            @click="removeExtra(item)"
+          >
+            <AppIcon name="close" :size="10" />
+          </button>
+        </span>
+        <span v-if="selectedSkill" class="chip chip--skill">
+          <AppIcon name="sparkles" :size="11" />
+          {{ selectedSkill.name }}
+          <button type="button" class="chip__close" title="取消选择" @click="selectedSkillId = ''">
+            <AppIcon name="close" :size="10" />
+          </button>
+        </span>
+      </div>
+
       <div class="composer__box">
         <textarea
           ref="inputRef"
@@ -238,21 +535,109 @@ onMounted(() => {
           @keydown="onKeydown"
         />
         <div class="composer__bar">
-          <span class="composer__hint">对话会保存到本 Task；不会伪造 AI 回复。</span>
-          <button v-if="sending" type="button" class="btn btn--ghost btn--sm" @click="stop">
-            停止
-          </button>
-          <button
-            v-else
-            type="button"
-            class="btn btn--primary btn--sm"
-            :disabled="!input.trim() || !hasModel"
-            @click="send"
-          >
-            <AppIcon name="send" :size="14" />
-            发送
-          </button>
+          <div class="composer__left">
+            <button
+              type="button"
+              class="composer__plus"
+              title="添加文件 / 引用 Skill / 执行"
+              :disabled="sending"
+              @click.stop="toggleMenu"
+            >
+              <AppIcon name="plus" :size="15" />
+            </button>
+            <div v-if="menuOpen" class="composer__menu" @click.stop>
+              <button type="button" class="composer__menu-item" @click="pickFile">
+                <AppIcon name="upload" :size="14" />
+                上传文件（临时引用）
+              </button>
+              <button type="button" class="composer__menu-item" @click="openSkillPicker">
+                <AppIcon name="sparkles" :size="14" />
+                引用 Skill
+              </button>
+              <button
+                type="button"
+                class="composer__menu-item"
+                :disabled="!hasModel"
+                @click="runExecution"
+              >
+                <AppIcon name="send" :size="14" />
+                执行当前 Skill
+              </button>
+              <button type="button" class="composer__menu-item" @click="goSkillLibrary">
+                <AppIcon name="library" :size="14" />
+                管理 Skill Library
+              </button>
+            </div>
+            <input
+              ref="fileInput"
+              class="hidden-input"
+              type="file"
+              accept=".pdf,.md,.markdown,.txt"
+              @change="onFileSelected"
+            />
+            <span v-if="uploading" class="composer__hint">上传中…</span>
+            <ModelControls
+              :task="task"
+              :models="models"
+              @task-updated="emit('task-updated', $event)"
+              @notify="app.notify('error', $event)"
+            />
+          </div>
+          <div class="composer__right">
+            <button v-if="sending" type="button" class="btn btn--ghost btn--sm" @click="stop">
+              停止
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="!input.trim() || !hasModel"
+              @click="send"
+            >
+              <AppIcon name="send" :size="14" />
+              发送
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div v-if="skillPickerOpen" class="skill-picker" @click.stop>
+        <header class="skill-picker__head">
+          <span>引用 Skill</span>
+          <button type="button" class="btn btn--ghost btn--sm" @click="skillPickerOpen = false">
+            关闭
+          </button>
+        </header>
+        <p v-if="taskSkills.length" class="skill-picker__label">Task 已引用</p>
+        <ul v-if="taskSkills.length" class="skill-picker__list">
+          <li v-for="skill in taskSkills" :key="skill.id" class="skill-picker__row">
+            <button type="button" class="skill-picker__pick" @click="chooseSkill(skill)">
+              <span class="skill-picker__name">{{ skill.name }}</span>
+              <span class="skill-picker__desc">{{ skill.description }}</span>
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" @click="dropTaskSkill(skill)">
+              移除
+            </button>
+          </li>
+        </ul>
+        <p class="skill-picker__label">Skill Library</p>
+        <ul class="skill-picker__list">
+          <li
+            v-for="skill in librarySkills.filter(
+              (item) => !taskSkills.some((ref) => ref.id === item.id),
+            )"
+            :key="skill.id"
+            class="skill-picker__row"
+          >
+            <button type="button" class="skill-picker__pick" @click="chooseSkill(skill)">
+              <span class="skill-picker__name">{{ skill.name }}</span>
+              <span class="skill-picker__desc">{{ skill.description }}</span>
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" @click="chooseSkill(skill)">
+              引入
+            </button>
+          </li>
+        </ul>
       </div>
     </div>
   </section>
@@ -365,8 +750,132 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
+.work-log {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.work-log--after {
+  margin: 0;
+}
+
+.work-log__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.work-log__thinking {
+  color: var(--accent);
+}
+
+.tool-events {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.tool-event__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.tool-event__dot--running {
+  background: var(--accent);
+}
+
+.tool-event__dot--ok {
+  background: var(--success);
+}
+
+.tool-event__dot--error {
+  background: var(--danger);
+}
+
+.tool-event__summary {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-error {
   margin: 0;
+}
+
+.tool-output {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.composer {
+  position: relative;
+}
+
+.composer__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip--file,
+.chip--skill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.chip--skill {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.chip__close {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.chip__close:hover {
+  color: var(--danger);
 }
 
 .composer__box {
@@ -399,14 +908,164 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
+}
+
+.composer__left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.composer__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer__plus {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.composer__plus:hover {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.composer__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated, var(--bg-subtle));
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(0, 0, 0, 0.35));
+}
+
+.composer__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer__menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.composer__menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .composer__hint {
   font-size: 11px;
   color: var(--text-faint);
+}
+
+.hidden-input {
+  display: none;
+}
+
+.skill-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 41;
+  width: 340px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated, var(--bg-subtle));
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(0, 0, 0, 0.35));
+}
+
+.skill-picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.skill-picker__label {
+  margin: 10px 0 4px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.skill-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-picker__pick {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-picker__pick:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+.skill-picker__name {
+  font-size: 12px;
+}
+
+.skill-picker__desc {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-usage {

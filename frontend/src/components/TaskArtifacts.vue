@@ -147,9 +147,13 @@ onMounted(() => {
             <h2 class="artifacts-preview__title">{{ selectedArtifact.title }}</h2>
             <p class="artifacts-preview__meta">
               v{{ selectedArtifact.version }}
-              <template v-if="selectedArtifact.source_execution_id">
-                · 来源 Execution {{ selectedArtifact.source_execution_id.slice(0, 8) }}
+              <template v-if="selectedArtifact.source_type === 'chat'">
+                · 来源：对话
               </template>
+              <template v-else-if="selectedArtifact.source_execution_id">
+                · 来源：运行
+              </template>
+              <template v-else>· 来源：手动</template>
               · {{ formatDateTime(selectedArtifact.created_at) }}
             </p>
           </div>

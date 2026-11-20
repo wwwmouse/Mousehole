@@ -9,6 +9,22 @@ export interface ChatStreamDone {
   message_id: string
   usage: Record<string, number> | null
   task_usage: Record<string, number> | null
+  tools_enabled: boolean
+  artifacts: string[]
+  executions: string[]
+}
+
+export interface ChatToolCall {
+  name: string
+  arguments: Record<string, unknown>
+}
+
+export interface ChatToolResult {
+  name: string
+  ok: boolean
+  summary: string
+  artifact_id: string | null
+  execution_id: string | null
 }
 
 export interface ChatStreamHandlers {
@@ -16,6 +32,9 @@ export interface ChatStreamHandlers {
   onDelta: (text: string) => void
   onDone: (data: ChatStreamDone) => void
   onError: (error: { code: string; message: string }) => void
+  onToolCall?: (data: ChatToolCall) => void
+  onToolResult?: (data: ChatToolResult) => void
+  onThinking?: () => void
 }
 
 interface ChatPayload {
@@ -46,11 +65,30 @@ function parseEvent(raw: string, handlers: ChatStreamHandlers): void {
     })
   } else if (event === 'delta') {
     handlers.onDelta(String(data.text ?? ''))
+  } else if (event === 'thinking') {
+    handlers.onThinking?.()
+  } else if (event === 'tool_call') {
+    handlers.onToolCall?.({
+      name: String(data.name ?? ''),
+      arguments:
+        (data.arguments as Record<string, unknown> | undefined) ?? {},
+    })
+  } else if (event === 'tool_result') {
+    handlers.onToolResult?.({
+      name: String(data.name ?? ''),
+      ok: Boolean(data.ok),
+      summary: String(data.summary ?? ''),
+      artifact_id: (data.artifact_id as string | null) ?? null,
+      execution_id: (data.execution_id as string | null) ?? null,
+    })
   } else if (event === 'done') {
     handlers.onDone({
       message_id: String(data.message_id ?? ''),
       usage: (data.usage as Record<string, number> | null) ?? null,
       task_usage: (data.task_usage as Record<string, number> | null) ?? null,
+      tools_enabled: Boolean(data.tools_enabled),
+      artifacts: (data.artifacts as string[] | undefined) ?? [],
+      executions: (data.executions as string[] | undefined) ?? [],
     })
   } else if (event === 'error') {
     handlers.onError({

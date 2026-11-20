@@ -18,7 +18,9 @@ import type {
   Provider,
   ProviderTestResult,
   ProviderUpdate,
-  SkillInfo,
+  Skill,
+  SkillFileInfo,
+  SkillPayload,
   Task,
   TaskFileContext,
   TaskFileMutationPayload,
@@ -160,8 +162,76 @@ export function createExecution(
   })
 }
 
-export function listSkills(): Promise<SkillInfo[]> {
-  return request<SkillInfo[]>('/skills')
+export function listSkills(): Promise<Skill[]> {
+  return request<Skill[]>('/skills')
+}
+
+export function createSkill(payload: SkillPayload): Promise<Skill> {
+  return request<Skill>('/skills', { method: 'POST', json: payload })
+}
+
+export function updateSkill(
+  skillId: string,
+  payload: Partial<SkillPayload>,
+): Promise<Skill> {
+  return request<Skill>(`/skills/${encodeURIComponent(skillId)}`, {
+    method: 'PATCH',
+    json: payload,
+  })
+}
+
+export function deleteSkill(skillId: string): Promise<void> {
+  return request<void>(`/skills/${encodeURIComponent(skillId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function listSkillFiles(skillId: string): Promise<SkillFileInfo[]> {
+  return request<SkillFileInfo[]>(
+    `/skills/${encodeURIComponent(skillId)}/files`,
+  )
+}
+
+export function addSkillFile(
+  skillId: string,
+  fileId: string,
+  path?: string,
+): Promise<SkillFileInfo> {
+  return request<SkillFileInfo>(`/skills/${encodeURIComponent(skillId)}/files`, {
+    method: 'POST',
+    json: { file_id: fileId, path: path ?? null },
+  })
+}
+
+export function removeSkillFile(
+  skillId: string,
+  fileId: string,
+): Promise<void> {
+  return request<void>(
+    `/skills/${encodeURIComponent(skillId)}/files/${encodeURIComponent(fileId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export function listTaskSkills(taskId: string): Promise<Skill[]> {
+  return request<Skill[]>(`/tasks/${encodeURIComponent(taskId)}/skills`)
+}
+
+export function addTaskSkill(taskId: string, skillId: string): Promise<Skill> {
+  return request<Skill>(`/tasks/${encodeURIComponent(taskId)}/skills`, {
+    method: 'POST',
+    json: { skill_id: skillId },
+  })
+}
+
+export function removeTaskSkill(
+  taskId: string,
+  skillId: string,
+): Promise<void> {
+  return request<void>(
+    `/tasks/${encodeURIComponent(taskId)}/skills/${encodeURIComponent(skillId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 export function listExecutions(taskId: string): Promise<Execution[]> {
