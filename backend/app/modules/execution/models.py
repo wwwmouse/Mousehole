@@ -107,7 +107,7 @@ class ExecutionFileSnapshot(Base):
     __tablename__ = "execution_file_snapshots"
     __table_args__ = (
         CheckConstraint(
-            "source_type IN ('project_inherited', 'task_added')",
+            "source_type IN ('project_inherited', 'task_added', 'skill_asset')",
             name="snapshot_source_type_valid",
         ),
         CheckConstraint(

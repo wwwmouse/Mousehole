@@ -57,6 +57,8 @@ def create_artifact(
     content_type: str,
     source_execution_id: uuid.UUID | None,
     storage_key: str | None = None,
+    source_type: str = "execution",
+    source_message_id: uuid.UUID | None = None,
 ) -> Artifact:
     artifact = Artifact(
         series_id=series_id,
@@ -66,6 +68,8 @@ def create_artifact(
         content_type=content_type,
         source_execution_id=source_execution_id,
         storage_key=storage_key,
+        source_type=source_type,
+        source_message_id=source_message_id,
     )
     session.add(artifact)
     session.flush()
@@ -93,6 +97,18 @@ def list_by_execution(
         .order_by(Artifact.created_at)
     )
     return list(session.scalars(stmt))
+
+
+def update_source_message(
+    session: Session, artifact_ids: list[uuid.UUID], message_id: uuid.UUID
+) -> None:
+    if not artifact_ids:
+        return
+    for artifact in session.scalars(
+        select(Artifact).where(Artifact.id.in_(artifact_ids))
+    ):
+        artifact.source_message_id = message_id
+    session.flush()
 
 
 def get_artifact(session: Session, artifact_id: uuid.UUID) -> Artifact | None:

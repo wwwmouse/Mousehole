@@ -14,6 +14,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.infrastructure.database.session import dispose_engine, get_session_factory
 from app.modules.execution import repository as execution_repository
+from app.modules.skill import service as skill_service
 from app.modules.execution import service as execution_service
 from app.modules.execution.scheduler import scheduler
 from app.modules.workspace.service import ensure_default_workspace
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     try:
         with get_session_factory()() as session:
             ensure_default_workspace(session, settings.default_workspace_name)
+            skill_service.ensure_builtin_skills(session)
             recovered = execution_service.recover_interrupted(session)
             pending_ids = execution_repository.list_pending_ids(session)
         if recovered:

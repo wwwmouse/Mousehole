@@ -12,6 +12,7 @@ from app.modules.execution.pipeline import run_execution
 from app.modules.file import storage as storage_module
 from app.modules.file.models import File, ProjectFile
 from app.modules.project.models import Project
+from app.modules.skill import service as skill_service
 from app.modules.task.models import Task
 from app.shared.exceptions import ProviderError
 
@@ -128,7 +129,7 @@ def test_pipeline_direct_context_creates_artifact(db_session, session_factory, s
     execution, steps, snapshots, artifacts = _fresh(session_factory, execution.id)
     assert execution.status == "completed"
     assert execution.completed_at is not None
-    assert execution.skill_id == "multi_doc_analysis"
+    assert execution.skill_id  # resolved skill id (library UUID)
     assert execution.skill_name == "多文档分析"
     assert execution.usage["total_tokens"] == 15
     assert [step.step_type for step in steps] == [
@@ -260,6 +261,41 @@ def test_pipeline_summarizes_when_over_budget(
     assert len(artifacts) == 1
     build_step = next(step for step in steps if step.step_type == "build_context")
     assert "分批摘要" in (build_step.output_summary or "")
+
+
+def test_pipeline_includes_skill_assets_and_snapshot(
+    db_session, session_factory, scenario
+):
+    task, workspace, file = scenario
+    skill = skill_service.list_skills(db_session)[0]
+    asset = _make_file(
+        db_session,
+        storage_module.get_storage(),
+        "skill-template.md",
+        "# 模板\n\n固定报告格式",
+    )
+    skill_service.add_skill_file(db_session, skill, asset, "templates/skill-template.md")
+    db_session.commit()
+
+    execution = execution_service.create_execution(
+        db_session,
+        task=task,
+        model_provider="deepseek",
+        model_name="deepseek-flash",
+        skill_id=str(skill.id),
+        skill_name=skill.name,
+    )
+    db_session.commit()
+    calls: list = []
+    _run(execution.id, session_factory, _make_stream(calls))
+
+    execution, steps, snapshots, artifacts = _fresh(session_factory, execution.id)
+    assert execution.status == "completed"
+    assert any(item.source_type == "skill_asset" for item in snapshots)
+    assert any(item.filename_snapshot == "skill-template.md" for item in snapshots)
+    prompt = calls[-1]["messages"][-1]["content"]
+    assert "skill-template.md" in prompt
+    assert "Skill 资料" in prompt
 
 
 def test_pipeline_parse_failure_marks_execution_failed(

@@ -26,6 +26,8 @@ def append_artifact(
     content_type: str = "text/markdown",
     source_execution_id: uuid.UUID | None = None,
     storage_key: str | None = None,
+    source_type: str = "execution",
+    source_message_id: uuid.UUID | None = None,
 ) -> Artifact:
     """Append a new version; historical artifacts are never overwritten."""
     version = repository.next_version(session, series.id)
@@ -38,6 +40,8 @@ def append_artifact(
         content_type=content_type,
         source_execution_id=source_execution_id,
         storage_key=storage_key,
+        source_type=source_type,
+        source_message_id=source_message_id,
     )
     series.current_artifact_id = artifact.id
     session.flush()

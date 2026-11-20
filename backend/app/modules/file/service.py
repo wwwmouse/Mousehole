@@ -90,6 +90,11 @@ class TaskOverrideEntry:
     file: FileRead
 
 
+def get_file(session: Session, file_id: uuid.UUID) -> File:
+    """Return the active File row (public accessor for other modules)."""
+    return _get_active_file(session, file_id)
+
+
 def upload_file(session: Session, upload: UploadFile) -> FileRead:
     filename = _safe_filename(upload.filename)
     file_type, mime_type = _file_type_for(filename, upload.filename)

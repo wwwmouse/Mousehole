@@ -56,5 +56,25 @@ async def stream_chat(
         yield event
 
 
+async def complete_chat(
+    provider: str,
+    model: str,
+    messages: list[dict],
+    *,
+    tools: list[dict] | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict:
+    config = provider_config.get_provider(provider)
+    return await adapters.complete(
+        config,
+        model,
+        messages,
+        tools=tools,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
 def list_models() -> list[dict[str, str]]:
     return provider_config.available_models()

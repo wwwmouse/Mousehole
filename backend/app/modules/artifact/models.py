@@ -65,6 +65,16 @@ class Artifact(Base):
         nullable=True,
         index=True,
     )
+    # execution | chat | manual
+    source_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="execution"
+    )
+    source_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType,
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     content_type: Mapped[str] = mapped_column(

@@ -21,7 +21,7 @@ from app.modules.execution.schemas import (
 )
 from app.modules.execution.scheduler import scheduler
 from app.modules.model import service as model_service
-from app.modules.skill import registry as skill_registry
+from app.modules.skill import service as skill_service
 from app.modules.task import service as task_service
 from app.modules.workspace.models import Workspace
 from app.shared.exceptions import ConflictError
@@ -46,7 +46,7 @@ async def create_execution(
     payload: ExecutionCreate | None = None,
 ) -> ExecutionRead:
     task = task_service.get_task(db, task_id)
-    skill = skill_registry.get_skill(payload.skill_id if payload else None)
+    skill = skill_service.resolve_skill(db, payload.skill_id if payload else None)
     provider, model, _config = model_service.resolve_model(
         task.model_provider, task.model_name
     )

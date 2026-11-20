@@ -16,8 +16,20 @@ from app.api.deps import get_db_factory
 from app.infrastructure.database.session import get_db
 from app.main import create_app
 from app.modules.file import storage as storage_module
+from app.modules.model import service as model_service
 from app.modules.file.models import File
+from app.modules.skill import service as skill_service
 from app.modules.workspace.models import Workspace
+
+
+@pytest.fixture(autouse=True)
+def disable_real_tool_prepass(monkeypatch):
+    """Never hit a real provider from tests: tool pre-pass is opt-in per test."""
+
+    async def _disabled(*args, **kwargs):
+        raise RuntimeError("tool pre-pass disabled in tests")
+
+    monkeypatch.setattr(model_service, "complete_chat", _disabled)
 
 
 @pytest.fixture()
@@ -28,6 +40,8 @@ def db_engine():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    with Session(engine) as seed:
+        skill_service.ensure_builtin_skills(seed)
     yield engine
     Base.metadata.drop_all(engine)
     engine.dispose()

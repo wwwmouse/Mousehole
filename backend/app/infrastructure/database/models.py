@@ -3,6 +3,7 @@
 from app.infrastructure.database.base import Base
 from app.modules.artifact.models import Artifact, ArtifactSeries
 from app.modules.conversation.models import Conversation, Message
+from app.modules.skill.models import Skill, SkillFile, TaskSkill  # noqa: F401
 from app.modules.execution.models import (
     Execution,
     ExecutionFileSnapshot,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -163,6 +165,118 @@ def test_chat_error_does_not_fake_assistant_message(
     messages = client.get(f"/api/v1/tasks/{task_id}/messages").json()
     assert [item["role"] for item in messages["messages"]] == ["user"]
     assert messages["task_usage"] is None
+
+
+def _tool_call_complete(tool_name: str, arguments: dict):
+    state = {"called": 0}
+
+    async def fake_complete(provider, model, messages, *, tools=None, **kwargs):
+        state["called"] += 1
+        if state["called"] == 1:
+            return {
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "name": tool_name,
+                        "arguments": json.dumps(arguments, ensure_ascii=False),
+                    }
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+            }
+        return {
+            "content": "已完成。",
+            "tool_calls": [],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
+        }
+
+    return fake_complete
+
+
+async def _unexpected_stream(provider, model, messages, **kwargs):
+    raise AssertionError("stream_chat should not be called when tools finish the turn")
+    yield  # pragma: no cover
+
+
+def test_chat_tool_saves_artifact_with_chat_source(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(
+        model_service,
+        "complete_chat",
+        _tool_call_complete(
+            "save_artifact",
+            {"title": "对话成果", "content": "# 来自对话的成果", "series_title": "对话系列"},
+        ),
+    )
+    monkeypatch.setattr(model_service, "stream_chat", _unexpected_stream)
+    task_id = _create_task(client)
+
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "帮我总结成成果"}
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert "event: tool_call" in body
+    assert "event: tool_result" in body
+    assert "event: done" in body
+    done_line = next(
+        line for line in body.splitlines() if "artifacts" in line and "message_id" in line
+    )
+    payload = json.loads(done_line.split("data: ", 1)[1])
+    assert len(payload["artifacts"]) == 1
+
+    series_list = client.get(f"/api/v1/tasks/{task_id}/artifact-series").json()
+    assert series_list[0]["title"] == "对话系列"
+    detail = client.get(f"/api/v1/artifact-series/{series_list[0]['id']}").json()
+    artifact = detail["artifacts"][0]
+    assert artifact["content"] == "# 来自对话的成果"
+    assert artifact["source_type"] == "chat"
+    assert artifact["source_message_id"] == payload["message_id"]
+
+    messages = client.get(f"/api/v1/tasks/{task_id}/messages").json()
+    assert messages["messages"][-1]["content"] == "已完成。"
+
+
+def test_chat_tool_creates_execution(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(
+        model_service,
+        "complete_chat",
+        _tool_call_complete("create_execution", {}),
+    )
+    task_id = _create_task(client)
+
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "做多文档分析"}
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert "event: tool_result" in body
+    executions = client.get(f"/api/v1/tasks/{task_id}/executions").json()
+    assert len(executions) == 1
+    assert executions[0]["status"] == "pending"
+    assert executions[0]["skill_name"] == "多文档分析"
+
+
+def test_chat_tool_read_task_files(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(
+        model_service,
+        "complete_chat",
+        _tool_call_complete("read_task_files", {}),
+    )
+    task_id = _create_task(client)
+
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "有哪些文件"}
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert "event: tool_call" in body
+    assert "tool_result" in body
+    assert "已完成。" in body
 
 
 def test_chat_without_configured_provider_returns_422(

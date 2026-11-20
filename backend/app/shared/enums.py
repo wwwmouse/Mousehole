@@ -38,6 +38,7 @@ class ExecutionStepStatus(StrEnum):
 class SnapshotSourceType(StrEnum):
     PROJECT_INHERITED = "project_inherited"
     TASK_ADDED = "task_added"
+    SKILL_ASSET = "skill_asset"
 
 
 class SnapshotUsageMode(StrEnum):

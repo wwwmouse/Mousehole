@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 
 from app.modules.context import service as context_service
@@ -47,8 +48,9 @@ def compute_budget(
 @dataclass
 class FileText:
     file: File
-    source_type: str  # project_inherited | task_added
+    source_type: str  # project_inherited | task_added | skill_asset
     text: str
+    path: str | None = None
 
 
 @dataclass
@@ -82,9 +84,17 @@ def collect_file_texts(session, task: Task) -> list[FileText]:
     return texts
 
 
+SOURCE_LABELS = {
+    "project_inherited": "项目继承",
+    "task_added": "额外引用",
+    "skill_asset": "Skill 资料",
+}
+
+
 def _header(item: FileText) -> str:
-    label = "项目继承" if item.source_type == "project_inherited" else "额外引用"
-    return f"### 文件：{item.file.filename}（{label}）"
+    label = SOURCE_LABELS.get(item.source_type, item.source_type)
+    name = item.path or item.file.filename
+    return f"### 文件：{name}（{label}）"
 
 
 def render_context(items: list[FileText]) -> str:
@@ -92,6 +102,38 @@ def render_context(items: list[FileText]) -> str:
         return "（本任务没有可用文件）"
     blocks = [f"{_header(item)}\n\n{item.text}" for item in items]
     return "\n\n".join(blocks)
+
+
+def collect_skill_asset_texts(session, skill) -> list[FileText]:
+    """Files/folders attached to the selected Skill, used as reference assets."""
+    from app.modules.skill import service as skill_service
+
+    if skill is None:
+        return []
+    try:
+        skill_id = uuid.UUID(str(skill.id))
+    except (ValueError, AttributeError, TypeError):
+        return []
+    storage = get_storage()
+    texts: list[FileText] = []
+    for link, file_row in skill_service.list_skill_files(session, skill_id):
+        data = storage.read(file_row.storage_key)
+        try:
+            text = document_service.extract_text(file_row.file_type, data)
+        except FileParseError as exc:
+            raise FileParseError(
+                f"Skill 资料解析失败：{file_row.filename}（{exc.message}）",
+                details={"filename": file_row.filename},
+            ) from exc
+        texts.append(
+            FileText(
+                file=file_row,
+                source_type="skill_asset",
+                text=text,
+                path=link.path,
+            )
+        )
+    return texts
 
 
 def plan_context(items: list[FileText], budget: int) -> ContextPlan:

@@ -12,6 +12,8 @@ class ArtifactRead(BaseModel):
     id: uuid.UUID
     series_id: uuid.UUID
     source_execution_id: uuid.UUID | None
+    source_type: str
+    source_message_id: uuid.UUID | None
     version: int
     title: str
     content_type: str

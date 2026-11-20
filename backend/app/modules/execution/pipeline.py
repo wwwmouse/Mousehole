@@ -14,7 +14,7 @@ from app.modules.execution import repository
 from app.modules.execution import service as execution_service
 from app.modules.execution.events import event_bus
 from app.modules.execution.prompts import summary_messages
-from app.modules.skill import registry as skill_registry
+from app.modules.skill import service as skill_service
 from app.modules.model import service as model_service
 from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
@@ -164,7 +164,7 @@ async def run_execution(
 
         execution_service.mark_running(session, execution)
         session.commit()
-        skill = skill_registry.get_skill(execution.skill_id)
+        skill = skill_service.resolve_skill(session, execution.skill_id)
         if execution.skill_id is None:
             execution.skill_id = skill.id
             execution.skill_name = skill.name
@@ -200,6 +200,7 @@ async def run_execution(
         # 2) parse documents (explicit failure, never silently skipped)
         start_step("parse_documents", "解析文档")
         texts = builder.collect_file_texts(session, task)
+        texts += builder.collect_skill_asset_texts(session, skill)
         estimated = sum(builder.estimate_tokens(item.text) for item in texts)
         finish_step(output_summary=f"{len(texts)} 个文件，约 {estimated} tokens")
         _check_cancel(cancel_check, execution_id)
@@ -266,7 +267,7 @@ async def run_execution(
             execution_id,
             provider=provider,
             model=model,
-            messages=skill_registry.render_messages(skill, task, context_text),
+            messages=skill_service.render_messages(skill, task, context_text),
             temperature=temperature,
             max_tokens=max_tokens,
             cancel_check=cancel_check,
