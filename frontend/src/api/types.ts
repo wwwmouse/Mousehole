@@ -209,6 +209,41 @@ export interface ChatMessage {
   created_at: string
 }
 
+export interface StatsTokens {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export interface RecentArtifact {
+  artifact_id: string
+  title: string
+  version: number
+  task_id: string
+  task_title: string
+  project_id: string | null
+  project_name: string | null
+  created_at: string
+}
+
+export interface DailyStats {
+  date: string
+  conversation_turns: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export interface StatsOverview {
+  period_days: number
+  conversation_turns: number
+  execution_count: number
+  tokens: StatsTokens
+  tokens_complete: boolean
+  daily: DailyStats[]
+  recent_artifacts: RecentArtifact[]
+}
+
 export interface TaskMessages {
   task_id: string
   conversation_id: string | null

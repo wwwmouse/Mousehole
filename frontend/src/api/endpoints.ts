@@ -20,6 +20,7 @@ import type {
   ProviderUpdate,
   Skill,
   SkillFileInfo,
+  StatsOverview,
   SkillPayload,
   Task,
   TaskFileContext,
@@ -297,6 +298,12 @@ export function deleteArtifact(artifactId: string): Promise<void> {
 
 export function artifactDownloadUrl(artifactId: string): string {
   return `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`
+}
+
+/* ---------------------------------- stats ------------------------------------ */
+
+export function getStatsOverview(days = 7): Promise<StatsOverview> {
+  return request<StatsOverview>(`/stats/overview?days=${days}`)
 }
 
 /* --------------------------------- providers --------------------------------- */

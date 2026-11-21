@@ -30,6 +30,8 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const search = ref('')
 const searching = ref(false)
+const typeFilter = ref('')
+const sortBy = ref<'updated' | 'name' | 'size'>('updated')
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
@@ -51,9 +53,23 @@ const conflictRefs = ref<ReferenceInfo[]>([])
 
 let searchTimer: number | undefined
 
+const visibleFiles = computed(() => {
+  const items = [...files.value]
+  if (sortBy.value === 'name') {
+    items.sort((a, b) => a.filename.localeCompare(b.filename, 'zh-CN'))
+  } else if (sortBy.value === 'size') {
+    items.sort((a, b) => b.size - a.size)
+  } else {
+    items.sort((a, b) => (b.updated_at ?? b.created_at).localeCompare(a.updated_at ?? a.created_at))
+  }
+  return items
+})
+
+const hasFilters = computed(() => Boolean(search.value.trim() || typeFilter.value))
+
 const filteredCountLabel = computed(() => {
-  if (search.value.trim()) return `${files.value.length} 个匹配文件`
-  return `${files.value.length} 个文件`
+  if (search.value.trim() || typeFilter.value) return `${visibleFiles.value.length} 个匹配文件`
+  return `${visibleFiles.value.length} 个文件`
 })
 
 async function load(): Promise<void> {
@@ -61,7 +77,11 @@ async function load(): Promise<void> {
   searching.value = true
   loadError.value = null
   try {
-    files.value = await listFiles({ search: search.value.trim() || undefined, limit: 100 })
+    files.value = await listFiles({
+      search: search.value.trim() || undefined,
+      file_type: typeFilter.value || undefined,
+      limit: 100,
+    })
   } catch (error) {
     loadError.value = errorMessage(error)
     files.value = []
@@ -178,6 +198,9 @@ watch(search, () => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(() => void load(), 320)
 })
+watch(typeFilter, () => {
+  void load()
+})
 
 onMounted(() => {
   void load()
@@ -225,6 +248,17 @@ onBeforeUnmount(() => {
         />
         <span v-if="searching" class="spinner spinner--sm" aria-hidden="true" />
       </div>
+      <select v-model="typeFilter" class="select toolbar__select" aria-label="按类型筛选">
+        <option value="">全部类型</option>
+        <option value="pdf">PDF</option>
+        <option value="md">Markdown</option>
+        <option value="txt">TXT</option>
+      </select>
+      <select v-model="sortBy" class="select toolbar__select" aria-label="排序方式">
+        <option value="updated">最近更新</option>
+        <option value="name">文件名</option>
+        <option value="size">文件大小</option>
+      </select>
       <span class="toolbar__count">{{ filteredCountLabel }}</span>
     </div>
 
@@ -245,7 +279,7 @@ onBeforeUnmount(() => {
     </div>
 
     <EmptyState
-      v-else-if="files.length === 0 && !search.trim()"
+      v-else-if="visibleFiles.length === 0 && !hasFilters"
       icon="library"
       title="Library 还没有文件"
       description="上传 PDF、Markdown 或 TXT 文件，之后可在 Project 和 Task 中引用它们。"
@@ -257,12 +291,14 @@ onBeforeUnmount(() => {
     </EmptyState>
 
     <EmptyState
-      v-else-if="files.length === 0"
+      v-else-if="visibleFiles.length === 0"
       icon="search"
       title="没有匹配的文件"
-      description="尝试其他关键词，或清空搜索查看全部文件。"
+      description="尝试其他关键词或类型筛选，或清空条件查看全部文件。"
     >
-      <button type="button" class="btn btn--ghost" @click="search = ''">清空搜索</button>
+      <button type="button" class="btn btn--ghost" @click="search = ''; typeFilter = ''">
+        清空筛选
+      </button>
     </EmptyState>
 
     <div v-else class="table-wrap">
@@ -277,7 +313,7 @@ onBeforeUnmount(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="file in files" :key="file.id">
+          <tr v-for="file in visibleFiles" :key="file.id">
             <td>
               <button type="button" class="cell-file" @click="openPreview(file)">
                 <span class="cell-file__icon"><AppIcon name="file" :size="14" /></span>
@@ -425,6 +461,11 @@ onBeforeUnmount(() => {
   color: var(--text);
   font-size: 13px;
   outline: none;
+}
+
+.toolbar__select {
+  width: auto;
+  min-width: 110px;
 }
 
 .toolbar__count {

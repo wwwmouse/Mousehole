@@ -26,9 +26,9 @@ import {
 import type { ArtifactSeries, FileItem, Project, ProjectFile, Task } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage, isNotFound } from '@/utils/errors'
-import { fileTypeLabel, formatBytes, formatDateTime, formatDate } from '@/utils/format'
+import { fileTypeLabel, formatBytes, formatDateTime, formatDate, formatRelative } from '@/utils/format'
 
-type TabKey = 'tasks' | 'files' | 'artifacts'
+type TabKey = 'overview' | 'tasks' | 'files' | 'artifacts'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,7 +44,7 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
 
-const activeTab = ref<TabKey>('tasks')
+const activeTab = ref<TabKey>('overview')
 const pickerOpen = ref(false)
 const addingFiles = ref(false)
 
@@ -54,7 +54,19 @@ const archiveBusy = ref(false)
 const removeTarget = ref<ProjectFile | null>(null)
 const removeBusy = ref(false)
 
+const recentTasks = computed(() =>
+  [...tasks.value]
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 5),
+)
+const recentSeries = computed(() =>
+  [...seriesList.value]
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 5),
+)
+
 const tabItems = computed(() => [
+  { key: 'overview' as TabKey, label: 'Overview', count: null },
   { key: 'tasks' as TabKey, label: 'Tasks', count: tasks.value.length },
   { key: 'files' as TabKey, label: 'Files', count: files.value.length },
   { key: 'artifacts' as TabKey, label: 'Artifacts', count: seriesList.value.length },
@@ -350,6 +362,66 @@ onMounted(() => {
         </button>
       </div>
 
+      <section v-if="activeTab === 'overview'" role="tabpanel" class="tab-panel">
+        <div class="overview-grid">
+          <article class="card overview-card">
+            <span class="overview-card__label">Tasks</span>
+            <span class="overview-card__value">{{ tasks.length }}</span>
+          </article>
+          <article class="card overview-card">
+            <span class="overview-card__label">Files</span>
+            <span class="overview-card__value">{{ files.length }}</span>
+          </article>
+          <article class="card overview-card">
+            <span class="overview-card__label">Artifacts</span>
+            <span class="overview-card__value">{{ seriesList.length }}</span>
+          </article>
+        </div>
+
+        <section class="card overview-section">
+          <header class="section-head">
+            <h2 class="context-title">最近活动</h2>
+            <span class="section-caption">最近更新的 Task 与成果</span>
+          </header>
+          <div class="overview-columns">
+            <div>
+              <p class="overview-subtitle">最近 Tasks</p>
+              <p v-if="recentTasks.length === 0" class="overview-empty">暂无 Task</p>
+              <ul v-else class="overview-list">
+                <li v-for="task in recentTasks" :key="task.id">
+                  <button type="button" class="overview-row" @click="openTask(task)">
+                    <span class="overview-row__title">{{ task.title }}</span>
+                    <span class="overview-row__meta">{{ formatRelative(task.updated_at) }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="overview-subtitle">最近成果</p>
+              <p v-if="recentSeries.length === 0" class="overview-empty">暂无成果</p>
+              <ul v-else class="overview-list">
+                <li v-for="series in recentSeries" :key="series.id">
+                  <button
+                    type="button"
+                    class="overview-row"
+                    @click="
+                      router.push({
+                        name: 'task',
+                        params: { id: series.task_id },
+                        query: { tab: 'artifacts' },
+                      })
+                    "
+                  >
+                    <span class="overview-row__title">{{ series.title }}</span>
+                    <span class="overview-row__meta">{{ formatRelative(series.updated_at) }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </section>
+
       <section v-if="activeTab === 'tasks'" role="tabpanel" class="tab-panel">
         <div class="section-toolbar">
           <p class="section-hint">项目内的 Task 会自动关联本项目，并继承项目文件作为可用上下文。</p>
@@ -396,7 +468,7 @@ onMounted(() => {
         </ul>
       </section>
 
-      <section v-else-if="activeTab === 'files'" role="tabpanel" class="tab-panel">
+      <section v-if="activeTab === 'files'" role="tabpanel" class="tab-panel">
         <div class="section-toolbar">
           <p class="section-hint">
             Project 文件是项目内 Task 的默认可用上下文来源；移除关联不会删除 Library 中的原始文件。
@@ -456,7 +528,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else role="tabpanel" class="tab-panel">
+      <section v-if="activeTab === 'artifacts'" role="tabpanel" class="tab-panel">
         <EmptyState
           v-if="seriesList.length === 0"
           icon="file"
@@ -598,6 +670,93 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.55;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.overview-card__label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.overview-card__value {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.overview-section {
+  padding: 16px;
+}
+
+.overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.overview-subtitle {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.overview-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.overview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overview-row:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+.overview-row__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-row__meta {
+  font-size: 10.5px;
+  color: var(--text-faint);
 }
 
 .item-list {

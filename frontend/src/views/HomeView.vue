@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatsBarChart from '@/components/StatsBarChart.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -11,12 +12,13 @@ import {
   createTask,
   deleteProject,
   deleteTask,
+  getStatsOverview,
   listProjects,
   listTasks,
   updateProject,
   updateTask,
 } from '@/api/endpoints'
-import type { Project, Task } from '@/api/types'
+import type { Project, StatsOverview, Task } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 import { formatDate, formatRelative, greeting } from '@/utils/format'
@@ -30,9 +32,11 @@ const dateText = formatDate(now)
 
 const projects = ref<Project[]>([])
 const tasks = ref<Task[]>([])
+const stats = ref<StatsOverview | null>(null)
 const loading = ref(true)
 const projectsError = ref<string | null>(null)
 const tasksError = ref<string | null>(null)
+const statsError = ref<string | null>(null)
 const creating = ref(false)
 
 const recentProjects = computed(() => projects.value.slice(0, 5))
@@ -44,20 +48,45 @@ const projectNames = computed(() => {
   return map
 })
 
-const usageStats = [
+const recentArtifacts = computed(() => stats.value?.recent_artifacts ?? [])
+
+function formatNumber(value: number | undefined): string {
+  return (value ?? 0).toLocaleString('zh-CN')
+}
+
+const daily = computed(() => stats.value?.daily ?? [])
+const dailyLabels = computed(() => daily.value.map((item) => item.date.slice(5)))
+
+const usageStats = computed(() => [
   {
     key: 'conversations',
     icon: 'chart',
     label: '近 7 天对话轮数',
-    note: '对话与 Execution 统计将在 Phase 2 接入。',
+    value: stats.value ? formatNumber(stats.value.conversation_turns) : '—',
+    note: '按天统计',
+    series: daily.value.map((item) => item.conversation_turns),
+    labels: dailyLabels.value,
+    format: (value: number) => `${value} 轮`,
   },
   {
     key: 'tokens',
     icon: 'database',
     label: '近 7 天 Token 消耗',
-    note: '尚未接入模型 Provider 的 usage 数据。',
+    value: stats.value ? formatNumber(stats.value.tokens.total_tokens) : '—',
+    note: '按天统计',
+    series: daily.value.map((item) => item.total_tokens),
+    labels: dailyLabels.value,
+    format: (value: number) => `${formatNumber(value)} tokens`,
   },
-]
+])
+
+function openArtifact(item: { task_id: string }): void {
+  void router.push({
+    name: 'task',
+    params: { id: item.task_id },
+    query: { tab: 'artifacts' },
+  })
+}
 
 const bothFailed = computed(() => Boolean(projectsError.value && tasksError.value))
 
@@ -65,9 +94,11 @@ async function load(): Promise<void> {
   loading.value = true
   projectsError.value = null
   tasksError.value = null
-  const [projectResult, taskResult] = await Promise.allSettled([
+  statsError.value = null
+  const [projectResult, taskResult, statsResult] = await Promise.allSettled([
     listProjects({ limit: 200 }),
     listTasks({ limit: 5 }),
+    getStatsOverview(7),
   ])
   if (projectResult.status === 'fulfilled') {
     projects.value = projectResult.value
@@ -80,6 +111,12 @@ async function load(): Promise<void> {
   } else {
     tasksError.value = errorMessage(taskResult.reason)
     tasks.value = []
+  }
+  if (statsResult.status === 'fulfilled') {
+    stats.value = statsResult.value
+  } else {
+    statsError.value = errorMessage(statsResult.reason)
+    stats.value = null
   }
   loading.value = false
 }
@@ -200,10 +237,16 @@ onMounted(() => {
         <div class="stat-card__head">
           <span class="stat-card__icon"><AppIcon :name="stat.icon" :size="16" /></span>
           <span class="stat-card__label">{{ stat.label }}</span>
-          <span class="chip chip--muted">不可用</span>
+          <span v-if="statsError" class="chip chip--muted">不可用</span>
         </div>
-        <p class="stat-card__value">暂无数据</p>
-        <p class="stat-card__note">{{ stat.note }}</p>
+        <p class="stat-card__value">{{ stat.value }}</p>
+        <StatsBarChart
+          v-if="stats && !statsError"
+          :values="stat.series"
+          :labels="stat.labels"
+          :format="stat.format"
+        />
+        <p class="stat-card__note">{{ statsError ?? stat.note }}</p>
       </article>
     </section>
 
@@ -314,14 +357,40 @@ onMounted(() => {
     <section class="card section-card">
       <header class="section-head">
         <h2 class="section-title">最近成果</h2>
-        <span class="section-caption">Phase 3 提供</span>
+        <span class="section-caption">来自 Chat 与正式运行</span>
       </header>
+      <LoadingState v-if="loading" compact />
+      <div v-else-if="statsError" class="section-error">
+        <p>{{ statsError }}</p>
+        <button type="button" class="btn btn--ghost btn--sm" @click="load">重试</button>
+      </div>
       <EmptyState
+        v-else-if="recentArtifacts.length === 0"
         icon="file"
-        title="成果功能尚未开放"
-        description="Artifact 将在 Phase 3 提供，当前没有可展示的成果数据。"
+        title="还没有成果"
+        description="在 Task 中让 AI 生成并保存成果后，会在这里出现。"
         compact
-      />
+      >
+        <button type="button" class="btn btn--ghost btn--sm" :disabled="creating" @click="createNewTask">
+          新建 Task
+        </button>
+      </EmptyState>
+      <ul v-else class="recent-list">
+        <li v-for="item in recentArtifacts" :key="item.artifact_id" class="recent-list__item">
+          <button type="button" class="recent-row recent-row--button" @click="openArtifact(item)">
+            <span class="recent-row__icon"><AppIcon name="file" :size="15" /></span>
+            <span class="recent-row__main">
+              <span class="recent-row__title">{{ item.title }}</span>
+              <span class="recent-row__meta">
+                {{ item.task_title }}
+                <template v-if="item.project_name"> · {{ item.project_name }}</template>
+                · v{{ item.version }} · {{ formatRelative(item.created_at) }}
+              </span>
+            </span>
+            <AppIcon name="chevron-right" :size="14" />
+          </button>
+        </li>
+      </ul>
     </section>
 
   </div>

@@ -3,12 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
 import { getExecution, listExecutions } from '@/api/endpoints'
-import type { ExecutionDetail } from '@/api/types'
+import type { Execution, ExecutionDetail } from '@/api/types'
 import { formatDateTime } from '@/utils/format'
 
 const props = defineProps<{ taskId: string; refreshKey?: number }>()
 
 const detail = ref<ExecutionDetail | null>(null)
+const executions = ref<Execution[]>([])
 const loading = ref(true)
 const expanded = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
@@ -53,22 +54,36 @@ async function refresh(): Promise<void> {
     if (next.status === 'completed' || next.status === 'failed' || next.status === 'cancelled') {
       stopPolling()
       if (next.status === 'failed') expanded.value = true
+      void listExecutions(props.taskId).then((items) => {
+        executions.value = items
+      })
     }
   } catch {
     stopPolling()
   }
 }
 
+async function selectExecution(item: Execution): Promise<void> {
+  try {
+    detail.value = await getExecution(item.id)
+    if (isActive.value) startPolling()
+    else stopPolling()
+  } catch {
+    /* ignore */
+  }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const executions = await listExecutions(props.taskId)
-    if (executions.length === 0) {
+    const items = await listExecutions(props.taskId)
+    executions.value = items
+    if (items.length === 0) {
       detail.value = null
       stopPolling()
       return
     }
-    detail.value = await getExecution(executions[0].id)
+    detail.value = await getExecution(items[0].id)
     if (isActive.value) startPolling()
     else stopPolling()
   } catch {
@@ -136,6 +151,28 @@ onBeforeUnmount(stopPolling)
           <span class="run-progress__step-status">{{ step.status }}</span>
         </li>
       </ul>
+      <details v-if="executions.length > 1" class="run-progress__history">
+        <summary class="run-progress__history-summary">
+          历史运行（{{ executions.length }}）
+        </summary>
+        <ul class="run-progress__history-list">
+          <li v-for="item in executions" :key="item.id">
+            <button
+              type="button"
+              class="run-progress__history-row"
+              :class="{ 'run-progress__history-row--active': detail?.id === item.id }"
+              @click="selectExecution(item)"
+            >
+              <span class="run-progress__dot" :class="`run-progress__dot--${item.status}`" />
+              <span class="run-progress__history-status">
+                {{ STATUS_LABELS[item.status] ?? item.status }}
+              </span>
+              <span v-if="item.skill_name" class="run-progress__history-skill">{{ item.skill_name }}</span>
+              <span class="run-progress__history-time">{{ formatDateTime(item.created_at) }}</span>
+            </button>
+          </li>
+        </ul>
+      </details>
       <ul v-if="detail.snapshots.length" class="run-progress__files">
         <li v-for="snapshot in detail.snapshots" :key="snapshot.id" class="run-progress__file">
           <AppIcon name="file" :size="11" />
@@ -281,6 +318,62 @@ onBeforeUnmount(stopPolling)
 .run-progress__step-status {
   margin-left: auto;
   font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.run-progress__history {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.run-progress__history-summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.run-progress__history-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.run-progress__history-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.run-progress__history-row:hover,
+.run-progress__history-row--active {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+.run-progress__history-status {
+  min-width: 48px;
+}
+
+.run-progress__history-skill {
+  color: var(--text-muted);
+}
+
+.run-progress__history-time {
+  margin-left: auto;
   color: var(--text-faint);
 }
 
