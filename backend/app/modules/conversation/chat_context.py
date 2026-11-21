@@ -21,14 +21,17 @@ from app.modules.skill import service as skill_service
 from app.modules.task.models import Task
 from app.shared.exceptions import FileParseError
 
-CHAT_FILE_BUDGET_TOKENS = 12_000
-MAX_CHARS_PER_FILE = 8_000
+# File-only slice of the chat input. Full text is used for each file; the old
+# per-file 8k character cap was removed. 64k leaves ample room for system
+# prompt, history and the answer inside the 200k workspace context budget.
+CHAT_FILE_BUDGET_TOKENS = 64_000
 # Parsing very large files synchronously would block the chat request.
 MAX_CHAT_FILE_BYTES = 2 * 1024 * 1024
 
 SOURCE_LABELS = {
     "project_inherited": "项目继承",
     "task_added": "额外引用",
+    "temporary": "本轮临时",
     "skill_asset": "Skill 资料",
 }
 
@@ -45,14 +48,42 @@ def _read_excerpt(storage, file_row: File) -> str:
 
 
 def build_file_context(
-    session: Session, task: Task, skill=None
+    session: Session,
+    task: Task,
+    skill=None,
+    extra_file_ids: list[str] | None = None,
+    budget_tokens: int = CHAT_FILE_BUDGET_TOKENS,
 ) -> ChatFileContext | None:
     response = context_service.compute_task_files(session, task)
     entries: list[tuple[File, str, str | None]] = []
+    seen: set[str] = set()
     for entry in response.available:
         file_row = session.get(File, entry.file.id)
         if file_row is not None:
             entries.append((file_row, entry.source, None))
+            seen.add(str(file_row.id))
+
+    # Temporary files are attached to one chat turn only; they are never part
+    # of the Task's persistent context.
+    import uuid as _uuid
+
+    for raw_id in extra_file_ids or []:
+        try:
+            file_id = _uuid.UUID(str(raw_id))
+        except (ValueError, AttributeError, TypeError):
+            continue
+        file_row = session.get(File, file_id)
+        if (
+            file_row is None
+            or file_row.status != "active"
+            or not file_row.is_temporary
+            or file_row.owner_task_id != task.id
+        ):
+            continue
+        if str(file_row.id) in seen:
+            continue
+        seen.add(str(file_row.id))
+        entries.append((file_row, "temporary", None))
 
     if skill is not None:
         try:
@@ -135,7 +166,7 @@ def build_file_context(
             lines.append(f"### {display}\n（读取失败，无法加入上下文）")
             continue
 
-        remaining = CHAT_FILE_BUDGET_TOKENS - used_tokens
+        remaining = budget_tokens - used_tokens
         if remaining <= 0:
             record["status"] = "skipped"
             files.append(record)
@@ -144,8 +175,8 @@ def build_file_context(
                 "（超出本次对话文件预算，未展开；可调用 read_task_file 读取）"
             )
             continue
-        excerpt = text[:MAX_CHARS_PER_FILE]
-        truncated = len(text) > len(excerpt)
+        excerpt = text
+        truncated = False
         tokens = estimate_tokens(excerpt)
         if tokens > remaining:
             excerpt = excerpt[: max(0, remaining * 4)]
@@ -155,7 +186,11 @@ def build_file_context(
         record["status"] = "included"
         record["truncated"] = truncated
         files.append(record)
-        suffix = "\n（已截断）" if truncated else ""
+        suffix = (
+            "\n（超出本轮文件预算，已截断；可调用 read_task_file 分页读取剩余内容）"
+            if truncated
+            else ""
+        )
         lines.append(f"### {display}{suffix}\n{excerpt}")
 
     return ChatFileContext(text="\n\n".join(lines), files=files)

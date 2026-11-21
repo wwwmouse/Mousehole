@@ -239,6 +239,39 @@ def test_chat_error_does_not_fake_assistant_message(
     assert messages["task_usage"] is None
 
 
+def test_normal_chat_skips_tool_prepass_for_real_streaming(
+    client: TestClient, monkeypatch
+) -> None:
+    called = {"complete": False}
+    captured: list[list[dict]] = []
+
+    async def complete(*args, **kwargs):
+        called["complete"] = True
+        raise AssertionError("ordinary chat must not use the non-streaming pre-pass")
+
+    async def stream(provider, model, messages, **kwargs):
+        captured.append(messages)
+        yield {"type": "delta", "text": "流式"}
+        yield {"type": "delta", "text": "输出"}
+
+    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
+    monkeypatch.setattr(model_service, "complete_chat", complete)
+    monkeypatch.setattr(model_service, "stream_chat", stream)
+
+    task_id = _create_task(client)
+    with client.stream(
+        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "你好"}
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert called["complete"] is False
+    assert "流式" in body
+    assert "输出" in body
+    # Streaming calls must not advertise tools they cannot invoke.
+    assert "受控工具" not in captured[-1][0]["content"]
+    assert "<tool_call>" not in captured[-1][0]["content"]
+
+
 def test_chat_includes_available_files_in_context(
     client: TestClient, monkeypatch
 ) -> None:
@@ -330,9 +363,9 @@ def _tool_call_complete(tool_name: str, arguments: dict):
     return fake_complete
 
 
-async def _unexpected_stream(provider, model, messages, **kwargs):
-    raise AssertionError("stream_chat should not be called when tools finish the turn")
-    yield  # pragma: no cover
+async def _final_stream(provider, model, messages, **kwargs):
+    yield {"type": "delta", "text": "已完成。"}
+    yield {"type": "usage", "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}}
 
 
 def test_chat_tool_saves_artifact_with_chat_source(
@@ -347,7 +380,7 @@ def test_chat_tool_saves_artifact_with_chat_source(
             {"title": "对话成果", "content": "# 来自对话的成果", "series_title": "对话系列"},
         ),
     )
-    monkeypatch.setattr(model_service, "stream_chat", _unexpected_stream)
+    monkeypatch.setattr(model_service, "stream_chat", _final_stream)
     task_id = _create_task(client)
 
     with client.stream(
@@ -417,6 +450,7 @@ def test_chat_tool_creates_execution(client: TestClient, monkeypatch) -> None:
         "complete_chat",
         _tool_call_complete("create_execution", {}),
     )
+    monkeypatch.setattr(model_service, "stream_chat", _final_stream)
     task_id = _create_task(client)
 
     with client.stream(
@@ -438,6 +472,7 @@ def test_chat_tool_read_task_files(client: TestClient, monkeypatch) -> None:
         "complete_chat",
         _tool_call_complete("read_task_files", {}),
     )
+    monkeypatch.setattr(model_service, "stream_chat", _final_stream)
     task_id = _create_task(client)
 
     with client.stream(

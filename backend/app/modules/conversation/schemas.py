@@ -35,3 +35,5 @@ class ChatRequest(BaseModel):
     provider: str | None = Field(default=None, max_length=50)
     model: str | None = Field(default=None, max_length=100)
     skill_id: str | None = Field(default=None, max_length=100)
+    # Task-scoped temporary files used ONLY for this message.
+    file_ids: list[str] = Field(default_factory=list, max_length=20)

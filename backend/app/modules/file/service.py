@@ -16,6 +16,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -95,7 +96,13 @@ def get_file(session: Session, file_id: uuid.UUID) -> File:
     return _get_active_file(session, file_id)
 
 
-def upload_file(session: Session, upload: UploadFile) -> FileRead:
+def upload_file(
+    session: Session,
+    upload: UploadFile,
+    *,
+    is_temporary: bool = False,
+    owner_task_id: uuid.UUID | None = None,
+) -> FileRead:
     filename = _safe_filename(upload.filename)
     file_type, mime_type = _file_type_for(filename, upload.filename)
     if len(filename) > MAX_FILENAME_LENGTH:
@@ -121,6 +128,7 @@ def upload_file(session: Session, upload: UploadFile) -> FileRead:
     # reuses (or restores) the existing File row instead of failing.
     existing = repository.get_by_storage_key(session, storage_key)
     if existing is not None:
+        changed = False
         if existing.status != "active":
             existing.status = "active"
             existing.filename = filename
@@ -128,6 +136,14 @@ def upload_file(session: Session, upload: UploadFile) -> FileRead:
             existing.mime_type = mime_type
             existing.size = size
             existing.content_hash = content_hash
+            changed = True
+        # The same bytes already exist in the Global Library: reuse that row
+        # instead of creating a hidden duplicate.
+        if not is_temporary and existing.is_temporary:
+            existing.is_temporary = False
+            existing.owner_task_id = None
+            changed = True
+        if changed:
             session.commit()
             session.refresh(existing)
         return FileRead.model_validate(existing)
@@ -140,6 +156,8 @@ def upload_file(session: Session, upload: UploadFile) -> FileRead:
         mime_type=mime_type,
         size=size,
         content_hash=content_hash,
+        is_temporary=is_temporary,
+        owner_task_id=owner_task_id if is_temporary else None,
     )
     session.commit()
     session.refresh(file)
@@ -311,3 +329,84 @@ def remove_task_override(
         )
     session.delete(existing)
     session.commit()
+    _discard_temporary_file_if_unused(session, task_id, file_id)
+
+
+def delete_temporary_file(
+    session: Session, task_id: uuid.UUID, file_id: uuid.UUID
+) -> None:
+    """Remove a temporary file that has no Task include override."""
+    from sqlalchemy.exc import IntegrityError
+
+    file_row = repository.get(session, file_id)
+    if (
+        file_row is None
+        or not file_row.is_temporary
+        or file_row.owner_task_id != task_id
+    ):
+        raise NotFoundError(
+            "临时文件不存在或不属于该 Task",
+            details={"task_id": str(task_id), "file_id": str(file_id)},
+        )
+    override = repository.get_override(session, task_id, file_id)
+    if override is not None:
+        session.delete(override)
+    storage_key = file_row.storage_key
+    session.delete(file_row)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise ConflictError(
+            "该临时文件已被历史执行引用，无法删除",
+            details={"file_id": str(file_id)},
+        ) from exc
+    try:
+        get_storage().purge(storage_key)
+    except Exception:  # noqa: BLE001 - cleanup must not break the API call
+        pass
+
+
+def _discard_temporary_file_if_unused(
+    session: Session, task_id: uuid.UUID, file_id: uuid.UUID
+) -> None:
+    """Delete a Task-scoped temporary File once nothing references it."""
+    from sqlalchemy.exc import IntegrityError
+
+    file_row = repository.get(session, file_id)
+    if (
+        file_row is None
+        or not file_row.is_temporary
+        or file_row.owner_task_id != task_id
+    ):
+        return
+    project_refs, task_refs = repository.count_references(session, file_id)
+    if project_refs or task_refs:
+        return
+    storage_key = file_row.storage_key
+    try:
+        session.delete(file_row)
+        session.commit()
+    except IntegrityError:
+        # Historical Execution snapshot still references the file; keep it.
+        session.rollback()
+        return
+    try:
+        get_storage().purge(storage_key)
+    except Exception:  # noqa: BLE001 - cleanup must not break the API call
+        pass
+
+
+def cleanup_task_temporary_files(session: Session, task_id: uuid.UUID) -> None:
+    """Remove temporary files owned by a deleted Task (best effort)."""
+    from app.modules.file.models import File
+
+    file_ids = list(
+        session.scalars(
+            select(File.id).where(
+                File.owner_task_id == task_id, File.is_temporary.is_(True)
+            )
+        )
+    )
+    for file_id in file_ids:
+        _discard_temporary_file_if_unused(session, task_id, file_id)

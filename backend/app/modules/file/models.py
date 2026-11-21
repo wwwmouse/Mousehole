@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -39,6 +40,14 @@ class File(TimestampMixin, Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=FileStatus.ACTIVE.value
+    )
+    # Temporary files belong to a single Task and never appear in the Global
+    # Library. They are hidden from list_files unless explicitly requested.
+    is_temporary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    owner_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, nullable=True, index=True
     )
 
 

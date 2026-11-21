@@ -46,3 +46,32 @@ def test_chat_context_orders_newest_files_first(db_session, workspace) -> None:
     assert context is not None
     assert context.text.index("new.md") < context.text.index("old.md")
     assert "优先参考最近更新" in context.text
+
+
+def test_chat_context_reads_full_article(
+    monkeypatch, db_session, workspace
+) -> None:
+    now = datetime.now(timezone.utc)
+    article = "# 长文章\n" + ("正文内容。" * 3_000) + "\nTAIL-MARKER"
+    file = _file("article.md", now)
+    file.size = len(article.encode())
+    project = Project(workspace_id=workspace.id, name="Full article")
+    db_session.add_all([file, project])
+    db_session.flush()
+    db_session.add(ProjectFile(project_id=project.id, file_id=file.id))
+    task = Task(
+        workspace_id=workspace.id, project_id=project.id, title="Read all"
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    monkeypatch.setattr(
+        "app.modules.conversation.chat_context._read_excerpt",
+        lambda storage, file_row: article,
+    )
+    context = build_file_context(db_session, task)
+    assert context is not None
+    assert "TAIL-MARKER" in context.text
+    assert "已截断" not in context.text
+    assert context.files[0]["status"] == "included"

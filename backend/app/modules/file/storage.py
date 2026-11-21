@@ -46,6 +46,18 @@ class LocalFileStorage:
         """Soft-delete keeps physical data; explicit purge is not exposed in MVP."""
         raise StorageError("MVP 不提供物理文件删除能力")
 
+    def purge(self, storage_key: str) -> None:
+        """Remove physical bytes for an internal temporary file.
+
+        Only used when a Task-scoped temporary File row is being discarded and
+        no other File row can reference the same content-addressed key.
+        """
+        path = self._resolve(storage_key)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise StorageError(f"临时文件清理失败：{exc}") from exc
+
     def _resolve(self, storage_key: str) -> Path:
         candidate = (self.root / storage_key).resolve()
         if self.root != candidate and self.root not in candidate.parents:

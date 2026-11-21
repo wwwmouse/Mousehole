@@ -15,7 +15,10 @@ from app.modules.artifact import repository as artifact_repository
 from app.modules.conversation import repository as conversation_repository
 from app.modules.conversation import service as conversation_service
 from app.modules.conversation import tools as chat_tools
-from app.modules.conversation.chat_context import build_file_context
+from app.modules.conversation.chat_context import (
+    CHAT_FILE_BUDGET_TOKENS,
+    build_file_context,
+)
 from app.modules.conversation.tools import tool_prompt
 from app.modules.conversation.models import Conversation, Message
 from app.modules.conversation.schemas import ChatRequest, TaskMessagesRead
@@ -38,8 +41,7 @@ SYSTEM_PROMPT = (
     "不要编造事实；不确定时明确说明。"
     "严格只使用资料原文：不要添加资料中不存在的警告、免责声明、隐私提示、"
     "背景信息或数字；如果必须推断，明确标注「推断」。"
-    "资料按最近更新时间排序，回答时优先参考最近更新的资料。\n\n"
-    + tool_prompt()
+    "资料按最近更新时间排序，回答时优先参考最近更新的资料。"
 )
 
 
@@ -58,6 +60,33 @@ ARTIFACT_INTENT_TOKENS = (
 def _wants_artifact(text: str) -> bool:
     lowered = text.casefold()
     return any(token in lowered for token in ARTIFACT_INTENT_TOKENS)
+
+
+# Tool pre-pass is non-streaming, so only run it when the message actually asks
+# for tool-backed actions. Ordinary chat goes straight to real SSE streaming.
+TOOL_INTENT_TOKENS = (
+    "保存",
+    "存为",
+    "存成",
+    "导出",
+    "artifact",
+    "成果",
+    "执行",
+    "多文档",
+    "读取",
+    "分页",
+    "有哪些文件",
+    "文件列表",
+    "调用工具",
+    "read_task",
+    "save_artifact",
+    "create_execution",
+)
+
+
+def _needs_tools(text: str) -> bool:
+    lowered = text.casefold()
+    return any(token in lowered for token in TOOL_INTENT_TOKENS)
 
 
 def _looks_like_tool_markup(text: str) -> bool:
@@ -95,6 +124,8 @@ def _build_messages(
     history: list[Message],
     file_context: str | None = None,
     skill=None,
+    *,
+    include_tools: bool = False,
 ) -> list[dict[str, str]]:
     context: list[str] = []
     if task.title:
@@ -106,6 +137,10 @@ def _build_messages(
             f"本次对话使用 Skill「{skill.name}」，请遵循其要求：\n{skill.instruction}"
         )
     system = SYSTEM_PROMPT
+    if include_tools:
+        # Only the tool pre-pass advertises tools; streaming calls do not pass
+        # a tools= argument, so they must not see tool instructions.
+        system = system + "\n\n" + tool_prompt()
     if skill is not None and skill.system_prompt:
         system = skill.system_prompt + "\n\n" + system
     if context:
@@ -146,7 +181,16 @@ async def send_message(
         else None
     )
     conversation = conversation_service.get_or_create_conversation(db, task)
-    file_context = build_file_context(db, task, skill)
+    workspace = db.get(Workspace, task.workspace_id)
+    context_budget = (
+        workspace.context_budget_tokens if workspace is not None else None
+    ) or 32_768
+    file_budget = max(
+        4_000, min(CHAT_FILE_BUDGET_TOKENS, context_budget - 6_000)
+    )
+    file_context = build_file_context(
+        db, task, skill, payload.file_ids, budget_tokens=file_budget
+    )
     user_metadata = {
         "skill": (
             {"id": skill.id, "name": skill.name} if skill is not None else None
@@ -158,7 +202,7 @@ async def send_message(
             [
                 item
                 for item in (file_context.files if file_context else [])
-                if item.get("source") == "task_added"
+                if item.get("source") in ("task_added", "temporary")
             ]
         ),
     }
@@ -174,17 +218,25 @@ async def send_message(
     history = conversation_repository.list_messages(
         db, conversation.id, limit=HISTORY_LIMIT
     )
-    messages = _build_messages(
+    tool_intent = _needs_tools(payload.content)
+    messages_tools = _build_messages(
         task,
         history,
         file_context.text if file_context else None,
         skill,
+        include_tools=True,
+    )
+    messages_plain = _build_messages(
+        task,
+        history,
+        file_context.text if file_context else None,
+        skill,
+        include_tools=False,
     )
     conversation_id = conversation.id
     temperature = task.temperature
     max_tokens = task.max_tokens
     if temperature is None or max_tokens is None:
-        workspace = db.get(Workspace, task.workspace_id)
         if workspace is not None:
             if temperature is None:
                 temperature = workspace.default_temperature
@@ -198,18 +250,19 @@ async def send_message(
     async def event_stream() -> AsyncIterator[str]:
         chunks: list[str] = []
         usage: dict | None = None
-        final_content: str | None = None
         created_artifacts: list[str] = []
         created_executions: list[str] = []
         tool_trace: list[dict] = []
-        messages_for_model: list[dict] = list(messages)
+        messages_for_model: list[dict] = list(
+            messages_tools if tool_intent else messages_plain
+        )
 
         try:
             yield _sse("start", {"provider": provider, "model": model})
             # --- controlled tool-calling pre-pass (non-streaming) ---
-            tools_ok = True
+            tools_ok = tool_intent
             try:
-                for _round in range(MAX_TOOL_ROUNDS):
+                for _round in range(MAX_TOOL_ROUNDS if tools_ok else 0):
                     # Heartbeats keep the UI informed while the non-streaming
                     # tool pre-pass is in flight (can take a while on local models).
                     pending = asyncio.create_task(
@@ -231,13 +284,9 @@ async def send_message(
                     usage = add_usage(usage, result.get("usage")) or usage
                     tool_calls = result.get("tool_calls") or []
                     if not tool_calls:
-                        candidate = (result.get("content") or "").strip()
-                        if _looks_like_tool_markup(candidate):
-                            # The model emitted tool-call markup as text; force a
-                            # clean final answer via the plain streaming path.
-                            final_content = None
-                        else:
-                            final_content = candidate
+                        # Even if the model returned text here, ignore it and
+                        # regenerate as a real SSE stream below. The pre-pass is
+                        # only for deciding/executing tools.
                         break
                     assistant_tool_calls = []
                     parsed_calls: list[tuple[dict, dict]] = []
@@ -309,26 +358,16 @@ async def send_message(
                         )
             except Exception:  # noqa: BLE001 - tools unsupported -> plain streaming
                 tools_ok = False
-                final_content = None
-                messages_for_model = list(messages)
+                messages_for_model = list(messages_plain)
 
-            async def _clean_answer() -> str | None:
-                """Final answer without tools; retry once if markup leaks."""
+            async def _clean_answer(target_messages: list[dict]) -> str | None:
+                """Markup-free fallback; only used if streaming leaked tool text."""
                 nonlocal usage
-                final_messages = list(messages_for_model) + [
-                    {
-                        "role": "user",
-                        "content": (
-                            "请基于以上信息直接给出最终回答。不要再调用工具，"
-                            "也不要输出任何工具调用标记（如 DSML / <tool_call>）。"
-                        ),
-                    }
-                ]
                 for _attempt in range(2):
                     outcome = await model_service.complete_chat(
                         provider,
                         model,
-                        final_messages,
+                        target_messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
@@ -338,73 +377,74 @@ async def send_message(
                         return candidate
                 return None
 
-            if final_content is None:
-                if tools_ok:
-                    # Tool rounds exhausted: ask for a clean, tool-free answer.
-                    final_content = await _clean_answer()
-                    if final_content is None:
-                        yield _sse(
-                            "error",
-                            {
-                                "code": "invalid_final_answer",
-                                "message": "模型返回了无法解析的工具调用文本，请重试",
-                            },
-                        )
-                        return
-                else:
-                    # Tools unsupported: stream normally, but buffer the opening
-                    # characters so leaked tool markup can be detected early.
-                    buffer = ""
-                    emitted = False
-                    markup_detected = False
-                    stream = model_service.stream_chat(
-                        provider,
-                        model,
-                        messages_for_model,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    )
-                    async for event in _stream_with_heartbeat(stream):
-                        if event["type"] == "thinking":
-                            yield _sse("thinking", {"phase": "stream"})
-                            continue
-                        if event["type"] == "delta":
-                            text = event["text"]
-                            if not emitted:
-                                buffer += text
-                                if _looks_like_tool_markup(buffer):
-                                    markup_detected = True
-                                    break
-                                if len(buffer) >= 160:
-                                    chunks.append(buffer)
-                                    yield _sse("delta", {"text": buffer})
-                                    emitted = True
-                            else:
-                                chunks.append(text)
-                                yield _sse("delta", {"text": text})
-                        elif event["type"] == "usage":
-                            usage = add_usage(usage, event["usage"]) or usage
-                    if markup_detected:
-                        chunks.clear()
-                        final_content = await _clean_answer()
-                        if final_content is None:
-                            yield _sse(
-                                "error",
-                                {
-                                    "code": "invalid_final_answer",
-                                    "message": "模型返回了无法解析的工具调用文本，请重试",
-                                },
-                            )
-                            return
-                    elif not emitted and buffer:
-                        chunks.append(buffer)
-                        yield _sse("delta", {"text": buffer})
+            # Final answer is always generated with real streaming. The tool
+            # pre-pass above only decides/executes tools and never supplies the
+            # user-visible answer.
+            final_messages = list(messages_plain)
+            if tool_trace:
+                # Keep only the assistant(tool_calls)/tool(result) messages that
+                # the pre-pass appended after the original conversation.
+                final_messages.extend(messages_for_model[len(messages_tools):])
+                final_messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "请基于以上工具结果直接给出最终回答。不要再调用工具，"
+                            "也不要输出任何工具调用标记（如 DSML / <tool_call>）。"
+                        ),
+                    }
+                )
 
-            if final_content is not None:
-                for index in range(0, len(final_content), 60):
-                    piece = final_content[index : index + 60]
+            buffer = ""
+            emitted = False
+            markup_detected = False
+            stream = model_service.stream_chat(
+                provider,
+                model,
+                final_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            async for event in _stream_with_heartbeat(stream):
+                if event["type"] == "thinking":
+                    yield _sse("thinking", {"phase": "stream"})
+                    continue
+                if event["type"] == "delta":
+                    text = event["text"]
+                    if not emitted:
+                        buffer += text
+                        if _looks_like_tool_markup(buffer):
+                            markup_detected = True
+                            break
+                        if len(buffer) >= 80:
+                            chunks.append(buffer)
+                            yield _sse("delta", {"text": buffer})
+                            emitted = True
+                    else:
+                        chunks.append(text)
+                        yield _sse("delta", {"text": text})
+                elif event["type"] == "usage":
+                    usage = add_usage(usage, event["usage"]) or usage
+
+            if markup_detected:
+                chunks.clear()
+                clean = await _clean_answer(final_messages)
+                if clean is None:
+                    yield _sse(
+                        "error",
+                        {
+                            "code": "invalid_final_answer",
+                            "message": "模型返回了无法解析的工具调用文本，请重试",
+                        },
+                    )
+                    return
+                for index in range(0, len(clean), 60):
+                    piece = clean[index : index + 60]
                     chunks.append(piece)
                     yield _sse("delta", {"text": piece})
+            elif not emitted and buffer:
+                chunks.append(buffer)
+                yield _sse("delta", {"text": buffer})
         except Exception as exc:  # noqa: BLE001 - surface provider errors to the client
             code = getattr(exc, "code", "provider_error")
             message = getattr(exc, "message", str(exc))

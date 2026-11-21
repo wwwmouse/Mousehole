@@ -20,8 +20,11 @@ def list_files(
     status: str = "active",
     limit: int = 50,
     offset: int = 0,
+    include_temporary: bool = False,
 ) -> list[File]:
     stmt = select(File).order_by(File.created_at.desc())
+    if not include_temporary:
+        stmt = stmt.where(File.is_temporary.is_(False))
     if status:
         stmt = stmt.where(File.status == status)
     if file_type:
@@ -51,6 +54,19 @@ def count_references(session: Session, file_id: uuid.UUID) -> tuple[int, int]:
     return project_refs, task_refs
 
 
+def count_snapshot_references(session: Session, file_id: uuid.UUID) -> int:
+    from app.modules.execution.models import ExecutionFileSnapshot
+
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(ExecutionFileSnapshot)
+            .where(ExecutionFileSnapshot.file_id == file_id)
+        )
+        or 0
+    )
+
+
 # --- Phase 1: file domain additions (append-only) ---
 
 from app.modules.project.models import Project  # noqa: E402
@@ -72,6 +88,8 @@ def create(
     mime_type: str,
     size: int,
     content_hash: str,
+    is_temporary: bool = False,
+    owner_task_id: uuid.UUID | None = None,
 ) -> File:
     file = File(
         filename=filename,
@@ -80,6 +98,8 @@ def create(
         mime_type=mime_type,
         size=size,
         content_hash=content_hash,
+        is_temporary=is_temporary,
+        owner_task_id=owner_task_id,
     )
     session.add(file)
     session.flush()

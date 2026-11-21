@@ -42,6 +42,9 @@ def compute_task_files(session: Session, task: Task) -> TaskFilesResponse:
         # Overrides may point at files that were soft-deleted afterwards.
         if entry.file.status != "active":
             continue
+        # Temporary files are per-message attachments, never Task context.
+        if entry.file.is_temporary:
+            continue
         if entry.action == "include":
             include_files[entry.file.id] = entry.file
         else:

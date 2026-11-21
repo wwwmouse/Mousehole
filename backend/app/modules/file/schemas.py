@@ -16,6 +16,7 @@ class FileRead(BaseModel):
     size: int
     content_hash: str
     status: str
+    is_temporary: bool = False
     created_at: datetime
     updated_at: datetime
 

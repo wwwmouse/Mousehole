@@ -160,3 +160,7 @@ def delete_task(session: Session, task_id: uuid.UUID) -> None:
     task = get_task(session, task_id)
     repository.delete(session, task)
     session.commit()
+    # Task-scoped temporary files are hidden from the Library; discard them.
+    from app.modules.file import service as file_service
+
+    file_service.cleanup_task_temporary_files(session, task_id)
