@@ -9,12 +9,10 @@ import ModelControls from '@/components/ModelControls.vue'
 import RunProgress from '@/components/RunProgress.vue'
 import { streamTaskChat } from '@/api/chat'
 import {
-  getTaskFiles,
   listSkills,
   listTaskMessages,
   removeTaskFileOverride,
-  updateTaskFile,
-  uploadFile,
+  uploadTaskTemporaryFile,
 } from '@/api/endpoints'
 import type {
   ChatMessage,
@@ -79,6 +77,7 @@ const TOOL_LABELS: Record<string, string> = {
 const SOURCE_LABELS: Record<string, string> = {
   project_inherited: '项目继承',
   task_added: '额外引用',
+  temporary: '本轮临时',
   skill_asset: 'Skill 资料',
 }
 
@@ -137,17 +136,6 @@ async function load(): Promise<void> {
   }
 }
 
-async function refreshExtraFiles(): Promise<void> {
-  try {
-    const context = await getTaskFiles(props.taskId)
-    extraFiles.value = context.available.filter(
-      (item) => item.source === 'task_added',
-    )
-  } catch {
-    /* keep current chips */
-  }
-}
-
 function resizeInput(): void {
   const el = inputRef.value
   if (!el) return
@@ -170,13 +158,12 @@ async function onFileSelected(event: Event): Promise<void> {
   if (!file) return
   uploading.value = true
   try {
-    const uploaded = await uploadFile(file)
-    await updateTaskFile(props.taskId, {
-      file_id: uploaded.id,
-      action: 'include',
-    })
-    app.notify('success', `已临时引用「${uploaded.filename}」`)
-    await refreshExtraFiles()
+    const uploaded = await uploadTaskTemporaryFile(props.taskId, file)
+    extraFiles.value = [
+      ...extraFiles.value,
+      { file: uploaded, source: 'temporary' },
+    ]
+    app.notify('success', `已附加「${uploaded.filename}」（仅本轮）`)
   } catch (error) {
     app.notifyError(error)
   } finally {
@@ -242,13 +229,14 @@ async function send(): Promise<void> {
     elapsed.value += 1
   }, 1000)
 
+  const attachmentIds = extraFiles.value.map((item) => item.file.id)
   const pendingMetadata = {
     skill: selectedSkill.value
       ? { id: selectedSkill.value.id, name: selectedSkill.value.name }
       : null,
     files: extraFiles.value.map((item) => ({
       filename: item.file.filename,
-      source: 'task_added',
+      source: 'temporary',
       status: 'included' as const,
     })),
   }
@@ -275,7 +263,11 @@ async function send(): Promise<void> {
   try {
     await streamTaskChat(
       props.taskId,
-      { content, skill_id: selectedSkillId.value || undefined },
+      {
+        content,
+        skill_id: selectedSkillId.value || undefined,
+        file_ids: attachmentIds.length ? attachmentIds : undefined,
+      },
       {
         onDelta: (text) => {
           thinking.value = false
@@ -337,8 +329,7 @@ async function send(): Promise<void> {
     streamText.value = ''
     controller = null
     await load()
-    // 文件已作为 Task 可用上下文发送并写入本次消息上下文；
-    // 输入栏不再保留 chips（可在「+」菜单里管理 Task 引用）。
+    // 临时文件仅用于刚发送的这一轮，不再写入 Task 可用上下文。
     extraFiles.value = []
     if (failed) app.notify('error', '对话未完成，请查看错误信息')
   }

@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import FilePickerModal from '@/components/FilePickerModal.vue'
+import FilePreviewModal from '@/components/FilePreviewModal.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -53,6 +54,7 @@ const archiveBusy = ref(false)
 
 const removeTarget = ref<ProjectFile | null>(null)
 const removeBusy = ref(false)
+const previewFile = ref<FileItem | null>(null)
 
 const recentTasks = computed(() =>
   [...tasks.value]
@@ -517,6 +519,13 @@ onMounted(() => {
                   <button
                     type="button"
                     class="btn btn--ghost btn--sm"
+                    @click="previewFile = item.file"
+                  >
+                    预览
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
                     @click="removeTarget = item"
                   >
                     移除
@@ -561,6 +570,11 @@ onMounted(() => {
           </li>
         </ul>
       </section>
+
+      <FilePreviewModal
+        :file-id="previewFile?.id ?? null"
+        @close="previewFile = null"
+      />
 
       <FilePickerModal
         :open="pickerOpen"

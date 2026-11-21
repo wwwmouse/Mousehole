@@ -45,6 +45,15 @@ test('core closed loop: upload file -> create project -> task -> chat -> artifac
   // 3) Create a Task from the project and send a chat message.
   await page.getByRole('tab').filter({ hasText: 'Tasks' }).click()
   await page.getByRole('button', { name: '新建 Task' }).first().click()
+
+  // File content is readable directly from Task Settings.
+  await page.getByRole('tab').filter({ hasText: 'Settings' }).click()
+  await page.getByRole('button', { name: '预览' }).first().click()
+  const previewDialog = page.getByRole('dialog')
+  await expect(previewDialog).toContainText('E2E Notes')
+  await page.keyboard.press('Escape')
+  await page.getByRole('tab').filter({ hasText: 'Chat' }).click()
+
   const composer = page.getByLabel('对话输入框')
   await expect(composer).toBeVisible()
   await composer.fill('请生成一份 E2E 测试成果')

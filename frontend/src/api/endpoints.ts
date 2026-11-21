@@ -345,6 +345,18 @@ export function uploadFile(file: File): Promise<FileItem> {
   return request<FileItem>('/files', { method: 'POST', form })
 }
 
+export function uploadTaskTemporaryFile(
+  taskId: string,
+  file: File,
+): Promise<FileItem> {
+  const form = new FormData()
+  form.append('file', file)
+  return request<FileItem>(
+    `/tasks/${encodeURIComponent(taskId)}/files/upload`,
+    { method: 'POST', form },
+  )
+}
+
 export function getFileContent(
   id: string,
   maxChars = 20_000,

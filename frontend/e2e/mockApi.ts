@@ -92,6 +92,18 @@ export async function installMockApi(page: Page): Promise<MockState> {
       return json(route, file, 201)
     }
 
+    if (parts[0] === 'files' && parts[1] && method === 'GET') {
+      const file = state.files.find((item) => item.id === parts[1]) ?? state.files[0]
+      if (!file) return json(route, { error: { code: 'not_found', message: 'no file' } }, 404)
+      if (parts[2] === 'content')
+        return json(route, {
+          file,
+          text: '# E2E Notes\n\nMock content',
+          truncated: false,
+        })
+      return json(route, { ...file, references: [] })
+    }
+
     // Projects
     if (method === 'GET' && path === '/projects')
       return json(route, state.projects.map(projectView))

@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import TaskArtifacts from '@/components/TaskArtifacts.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import FilePickerModal from '@/components/FilePickerModal.vue'
+import FilePreviewModal from '@/components/FilePreviewModal.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import {
@@ -60,6 +61,7 @@ const statusDraft = ref<string>('active')
 const statusUpdating = ref(false)
 
 const pickerOpen = ref(false)
+const previewFile = ref<FileItem | null>(null)
 const fileActionBusy = ref<string | null>(null)
 const addingFiles = ref(false)
 
@@ -676,6 +678,13 @@ onMounted(() => {
                 <button
                   type="button"
                   class="btn btn--ghost btn--sm"
+                  @click="previewFile = row.file"
+                >
+                  预览
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm"
                   :disabled="fileActionBusy === row.file.id"
                   @click="handleFileAction(row)"
                 >
@@ -693,6 +702,11 @@ onMounted(() => {
       <section v-if="activeTab === 'artifacts'" role="tabpanel" class="tab-panel">
         <TaskArtifacts :task-id="task.id" />
       </section>
+
+      <FilePreviewModal
+        :file-id="previewFile?.id ?? null"
+        @close="previewFile = null"
+      />
 
       <FilePickerModal
         :open="pickerOpen"
