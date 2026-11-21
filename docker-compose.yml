@@ -19,5 +19,32 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build: ./backend
+    container_name: mousehole-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+pg8000://${POSTGRES_USER:-mousehole}:${POSTGRES_PASSWORD:-mousehole}@postgres:5432/${POSTGRES_DB:-mousehole}
+      STORAGE_DIR: /data/storage
+      DATA_DIR: /data/data
+      CORS_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
+    volumes:
+      - ./storage:/data/storage
+      - ./data:/data/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: mousehole-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MOUSEHOLE_HTTP_PORT:-8090}:80"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:
