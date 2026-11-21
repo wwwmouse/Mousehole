@@ -10,6 +10,7 @@ from app.api.v1 import (
     projects,
     providers,
     skills,
+    stats,
     task_files,
     tasks,
     workspaces,
@@ -21,6 +22,7 @@ api_router.include_router(providers.router, prefix="/providers", tags=["provider
 api_router.include_router(models.router, prefix="/models", tags=["models"])
 api_router.include_router(chat.router, prefix="/tasks", tags=["chat"])
 api_router.include_router(skills.router, tags=["skills"])
+api_router.include_router(stats.router, tags=["stats"])
 api_router.include_router(executions.router, tags=["executions"])
 api_router.include_router(artifacts.router, tags=["artifacts"])
 api_router.include_router(workspaces.router, prefix="/workspaces", tags=["workspaces"])
