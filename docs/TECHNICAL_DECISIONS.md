@@ -763,7 +763,7 @@ Agent 必须遵守已经批准的产品规格、数据模型、技术决策和�
 
 1. **受控工具调用**：工具 schema 由 `_wrap(name, description, properties, required)` 工厂生成；`TOOLS_SPEC` 是唯一 allowlist；系统提示中的工具说明由 `tool_prompt()` 从 TOOLS_SPEC 动态生成，禁止硬编码工具清单。工具只能访问当前 Task 的文件、Artifact 与 Execution，无任意文件系统/Shell/外部写权限。
 2. **工具循环**：非流式 pre-pass，最多 4 轮；轮次结束后用**不带 tools 的 completion** 生成最终回答；若返回内容仍含 DSML/工具标记，丢弃并重试一次，仍失败则显式返回错误，不把乱码当正文。
-3. **Chat 文件上下文**：预算默认 12k tokens、单文件 8k 字符；按 `updated_at` 新→旧排序，提示词要求优先参考最近更新资料；>2MB 文件不自动展开。
+3. **Chat 文件上下文**：默认读取文件全文（≤2MB，取消单文件 8k 字符截断）；文件预算默认最多 64k tokens，并随 Workspace `context_budget_tokens` 自动收紧（预留 6k 给系统/历史/回答）；按 `updated_at` 新→旧排序，提示词要求优先参考最近更新资料；>2MB 文件不自动展开；仅总量超预算时截断并提示用 `read_task_file` 分页读取。
 4. **大文件读取**：`read_task_file` 支持 `offset/limit` 分页（每次最多 40000 字符），返回 total_chars/next_offset/has_more；读取上限 25MB，与上传上限一致。
 5. **消息追溯**：Message 增加 `metadata` JSON，记录用户消息携带的 Skill/临时文件与助手工具步骤/耗时；不保存完整 Prompt 或文件全文。
 6. **Artifact 独立于 Execution**：`source_execution_id` 可空；`source_type` 区分 execution/chat/manual，`source_message_id` 追溯聊天来源；删除单版本不破坏历史，系列为空时删除系列。

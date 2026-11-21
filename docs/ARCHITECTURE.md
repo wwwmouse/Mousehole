@@ -1128,11 +1128,11 @@ Agent 可以提出架构优化建议，但不能未经批准直接：
 |---|---|
 | skill | Skill / SkillFile / TaskSkill 数据与服务；内置 seed；解析 Skill 供 Execution 使用 |
 | conversation/tools | 受控工具 allowlist：read_task_files / read_task_file / save_artifact / create_execution；_wrap 工厂生成 TOOLS_SPEC；tool_prompt() 动态渲染系统提示 |
-| conversation/chat_context | Chat 的文件/Skill 资料上下文：预算内节选、最近更新优先、显式列出清单 |
+| conversation/chat_context | Chat 的文件/Skill 资料上下文：默认全文（≤2MB）、预算内截断、最近更新优先、显式列出清单 |
 
 ### 17.2 Chat 数据流
 
-1. 消息进入 → 解析 Skill（可选）→ 构建文件/Skill 资料上下文（预算 12k tokens，单文件 8k 字符，按 updated_at 新→旧）；
+1. 消息进入 → 解析 Skill（可选）→ 构建文件/Skill 资料上下文（默认全文≤2MB，文件预算最多 64k tokens，按 updated_at 新→旧，超预算才截断）；
 2. 工具 pre-pass（非流式，最多 4 轮）：模型调用工具 → 后端 allowlist 执行 → 结果回灌；
 3. 最终回答：不再带 tools，若模型泄漏 DSML/工具文本则重试一次，仍失败显式报错；
 4. 持久化 Message（含 usage 与 metadata）；Artifact 记录 `source_type=chat` + `source_message_id`。

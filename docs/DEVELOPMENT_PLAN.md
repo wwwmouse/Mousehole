@@ -168,7 +168,7 @@ MVP 开发压缩为四个 Phase。
 - Execution 产品层级下调：Artifacts 页不再展示 Execution；Execution 仅作为内部工程实体，UI 以 Chat 内「工作进度 / 运行详情」呈现，且不展示 Execution ID。
 - Artifact 独立于 Execution：`source_execution_id` 为可选来源；Chat 成果通过 `source_type=chat` + `source_message_id` 追溯；正式多文档分析仍走 Execution + Scheduler + Pipeline。
 - 工具调用可见性：工具 pre-pass 期间发送 `thinking` 心跳；Chat 展示可折叠「工作详情」（工具调用、结果、思考耗时），避免"无输出"的卡死观感。
-- Chat 文件上下文：普通对话按预算把 Task 可用文件节选进上下文（默认 12k tokens / 单文件 8k 字符），并始终给出文件清单；模型因此可以"看到"项目继承与额外引用文件，完整内容仍通过 `read_task_file` 工具读取。
+- Chat 文件上下文：普通对话默认把 Task 可用文件**全文**放入上下文（≤2MB，无单文件 8k 字符截断）；文件预算随 Workspace context budget 调整（默认最多 64k tokens），仅当总量超预算时才截断并提示用 `read_task_file` 分页读取。
 - 生成计时：Chat 在思考与流式生成期间持续显示秒数，并在模型静默每 2 秒时收到 `thinking` 心跳（pre-pass 与流式两条路径都覆盖）。
 - 输入栏附件语义：临时文件加入 Task 可用上下文后，发送消息即清空输入栏 chips，避免"文件没有随消息发出"的误解；需要继续管理时从「+」菜单或 Task Settings 进入。
 - 消息级追溯：Message 增加 `metadata`（迁移 k1l2m3n4o5p6）；用户消息记录 Skill 与文件清单（含来源与预算状态），助手消息记录工具步骤与耗时；UI 在每条消息顶部展示默认折叠的「思路链」，替代原先的"上次工作详情"。
@@ -216,8 +216,10 @@ MVP 开发压缩为四个 Phase。
 
 - 已完成：Home 统计与最近成果、Project Overview、Library 类型筛选/排序、Chat 运行历史、Docker 生产/开发 compose、备份恢复脚本。
 - 已验证：生产 compose 构建并启动（frontend 8090 / backend 8000 / postgres 5433），nginx 反代与统计接口正常；backup.ps1 生成 database.sql/storage.tar.gz/manifest.json；restore.ps1 完整恢复后 tasks/messages/artifacts/files 行数与备份前一致。
-- 已验证：Playwright E2E 核心闭环通过（Mock API，上传 → Project → Task → Chat → 成果下载/删除）。
-- 待完成：开发 compose 运行验证、浏览器人工验收、文档收尾。
+- 已验证：Playwright E2E 核心闭环通过（Mock API，上传 → Project → Task → 文件预览 → Chat → 成果下载/删除）。
+- 本轮追加：Task 临时文件改为**单轮附件**（不进 Library、不写入 Task 上下文）、Project/Task 文件预览、最终回答统一 SSE（工具 pre-pass 仅用于决定/执行工具，完成后重新流式生成）、README 启动说明重写。
+- 已验证：开发 compose 运行（5173 Vite / 8000 API / Vite client / API proxy 正常）；切回生产后数据行数不变；生产容器 restart 后服务与数据仍在。
+- **Phase 4 完成（2026-11-21）**：MVP 功能验收通过；剩余仅为 UI 视觉细节打磨，不阻塞 MVP。
 
 #### Phase 4：完整 UI、系统集成与 MVP 验收
 

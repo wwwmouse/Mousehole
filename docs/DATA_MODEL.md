@@ -864,4 +864,13 @@ mousehole 的核心数据模型围绕以下关系展开：
 
 ### 15.5 Phase 3 迁移链
 
-`f6a7b8c9d0e1`（Execution/Artifact）→ `g7b8c9d0e1f2`（预算列修复）→ `h8c9d0e1f2a3`（Execution Skill 快照）→ `i9d0e1f2a3b4`（Skill Library / Artifact 来源）→ `j0e1f2a3b4c5`（Skill 文件 / skill_asset）→ `k1l2m3n4o5p6`（Message metadata）。
+`f6a7b8c9d0e1`（Execution/Artifact）→ `g7b8c9d0e1f2`（预算列修复）→ `h8c9d0e1f2a3`（Execution Skill 快照）→ `i9d0e1f2a3b4`（Skill Library / Artifact 来源）→ `j0e1f2a3b4c5`（Skill 文件 / skill_asset）→ `k1l2m3n4o5p6`（Message metadata）→ `m3n4o5p6q7r8`（Task 临时文件）。
+
+### 15.6 Task 临时文件
+
+- `files.is_temporary`：true 表示该文件只属于某个 Task，**不出现在 Global Library 列表**；
+- `files.owner_task_id`：临时文件的所属 Task；
+- 上传入口：`POST /tasks/{id}/files/upload`，只创建隐藏的临时 File，**不写入 TaskFileOverride**；
+- 使用方式：Chat 发送时通过 `ChatRequest.file_ids` 显式携带，后端只在本次请求的 file context 中加入；
+- 生命周期：下一轮对话不会自动带上；移除附件或删除 Task 时，若无快照引用则删除 File 行并清理存储；历史 Execution 快照仍引用时保留；
+- 普通 `POST /files` 上传仍是全局 Library 文件（`is_temporary=false`）。

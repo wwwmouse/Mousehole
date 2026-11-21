@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**当前状态：Phase 4 进行中（MVP 最后阶段）。** Phase 1–3 已完成；Phase 3 覆盖 Execution / Artifact、Skill Library、Chat 受控工具、统一成果来源、消息级思路链与模型控制。Phase 4 正在补齐 Home 统计、Project Overview、Library 筛选、运行历史、Docker 交付与备份恢复。
+**当前状态：Phase 4 已完成（MVP 功能验收通过）。** Phase 1–3 已完成；Phase 4 已交付 Home 统计、Project Overview、Library 筛选、运行历史、Docker 生产/开发交付、备份恢复与 Playwright E2E。剩余仅为 UI 视觉细节打磨，不影响 MVP 使用。
 
 ---
 
@@ -101,73 +101,175 @@ mousehole/
 
 > 本机 5432 常被其他服务占用，本项目 PostgreSQL 默认映射到 **5433**（可用 `POSTGRES_PORT` / `DATABASE_URL` 调整）。Docker 命令在受限沙箱内不可用。
 
-## 本地运行
+## 如何运行
 
-> 需要**三个终端**：数据库（Docker）、后端（Python）、前端（Node），三者互相独立。
-> 常见误区：`alembic upgrade head` 只是升级数据库表结构，**不是启动后端**；后端由 `uvicorn` 启动，前端由 `npm run dev` 启动。
+本项目**推荐用 Docker 运行**：前端（Nginx）、后端（FastAPI）、数据库（PostgreSQL）分别是三个容器，一条命令即可全部启动。只有修改代码时才需要重建或使用开发模式。
 
-### 前置安装（只需一次）
+### 方式一：Docker 生产模式（日常使用/验收，推荐）
+
+**前提**：安装并启动 Docker Desktop；本机 **8090**、**8000**、**5433** 端口未被占用（8080 常被其他项目占用，所以本项目默认用 8090）。
+
+**第一次启动（只需一次）**：
 
 ```powershell
-# 后端依赖
-cd E:\VScode\Mousehole\backend
-py -3.14 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-
-# 前端依赖
-cd ..\frontend
-npm install
+cd E:\VScode\Mousehole
+copy .env.example .env        # 复制环境变量模板；.env 不入 Git，可按需修改密码/端口
+docker compose up -d --build  # 构建镜像并后台启动全部服务
 ```
 
-### 终端 1：数据库
+打开 **http://localhost:8090** 即可使用。首次启动时后端会自动执行数据库迁移并创建默认 Workspace。
+
+### 日常使用：第一次启动之后只需要 Docker 在运行
+
+**以后不需要再敲任何命令：**
+
+1. 确保 **Docker Desktop 正在运行**（建议在 Docker Desktop 设置里勾选 *Start Docker Desktop when you sign in*）；
+2. 打开 **http://localhost:8090**。
+
+三个容器都设置了 `restart: unless-stopped`，所以只要 Docker 启动，它们会自动恢复；不需要每天执行 `docker compose up`。
+
+只有以下情况才需要命令：
+
+| 情况 | 命令 |
+|---|---|
+| 修改了代码/重建镜像 | `docker compose up -d --build` |
+| 执行过 `docker compose stop` 或 `down` | `docker compose up -d` |
+| 修改了 `.env` | `docker compose up -d` |
+| Docker Desktop 重启/更新后没自动起来 | `docker compose up -d` |
+| 只想确认状态 | `docker compose ps` |
+
+> Docker Desktop 更新不会删除数据卷；更新后如果容器没自动启动，执行一次 `docker compose up -d` 即可。**永远不要用 `docker compose down -v`。**
+
+**第一次启动命令详解**：
+
+| 命令/参数 | 作用 |
+|---|---|
+| `docker compose` | 读取 `docker-compose.yml`，管理鼠标洞的三个容器 |
+| `up` | 创建并启动容器（postgres → backend → frontend） |
+| `-d` | detached，后台运行，不占用当前终端 |
+| `--build` | 启动前按当前源码重新构建前后端镜像；**改代码后必须加** |
+
+**日常启动/停止**：
 
 ```powershell
+docker compose up -d       # 启动已有容器（不重建，秒级）；Docker 开机自动启动时通常不用手动执行
+docker compose stop        # 停止容器但保留容器与数据；下次不会自动启动，需要 up -d 或 start
+docker compose start       # 启动已停止的容器
+docker compose restart     # 重启容器（改了 .env 或需要重连时）
+docker compose down        # 停止并删除容器，但保留数据库卷与 storage/data 数据
+```
+
+> ⚠️ **不要执行 `docker compose down -v`**：`-v` 会删除 PostgreSQL 数据卷（数据库内容），代码/文件数据无法通过重建恢复。
+
+**查看状态与日志**：
+
+```powershell
+docker compose ps                    # 查看三容器状态与端口映射
+docker compose logs -f backend       # 跟踪后端日志（Ctrl+C 退出）
+docker compose logs -f frontend      # 查看 Nginx 访问/错误日志
+docker compose exec postgres psql -U mousehole -d mousehole   # 进入数据库命令行
+```
+
+**更新代码 / 更新 Docker 镜像后**：
+
+```powershell
+docker compose up -d --build         # 按新代码重建镜像并替换容器；数据仍然保留
+```
+
+- 只是 Docker Desktop 重启：容器会自动恢复，通常什么都不用做；
+- 拉取了新的 PostgreSQL 镜像（可选）：`docker compose pull postgres` 再 `docker compose up -d`；升级前建议先备份；
+- 任何重建/更新都不会删除 `pgdata` 卷、`storage/`、`data/`。
+
+### 方式二：Docker 开发模式（写代码时用，带热更新）
+
+先停止生产模式，再启动开发模式（两者共用 project name 与数据卷，**不能同时启动**）：
+
+```powershell
+docker compose down
+docker compose -f docker-compose.dev.yml up -d
+```
+
+- 前端：**http://localhost:5173**（Vite dev server，保存代码即热更新）
+- 后端：**http://localhost:8000**（uvicorn --reload，保存 Python 即自动重启）
+- 停止开发模式并回到生产模式：
+
+```powershell
+docker compose -f docker-compose.dev.yml down
+docker compose up -d
+```
+
+**命令解释**：
+
+| 命令 | 作用 |
+|---|---|
+| `docker compose -f docker-compose.dev.yml up -d` | 使用开发 compose 启动（Vite + uvicorn --reload + PostgreSQL） |
+| `docker compose -f docker-compose.dev.yml down` | 停止并删除开发容器（数据保留） |
+
+### 8090 和 5173 有什么区别？
+
+| 端口 | 服务 | 用途 |
+|---|---|---|
+| **8090** | Nginx 容器（生产构建 dist） | 日常使用/验收；改代码后需要 `--build` |
+| **5173** | Vite dev server（开发模式） | 写代码；保存即热更新 |
+
+两者最终都连同一个后端/数据库；**不要同时跑两种 compose**。
+
+### 方式三：不用 Docker 的本地开发（可选）
+
+适合需要本机 Python/Node 调试时。需要三个终端，且 8000 端口不要和 Docker backend 冲突（先 `docker compose stop`）。
+
+```powershell
+# 终端 1：数据库
 cd E:\VScode\Mousehole
 docker compose up -d postgres
-docker compose ps                  # 看到 healthy 即可
-```
 
-### 终端 2：后端
-
-```powershell
-cd E:\VScode\Mousehole\backend
-
-# ① 升级数据库结构（有新增/修改表时执行一次；不是启动服务）
+# 终端 2：后端
+cd backend
 .\.venv\Scripts\python.exe -m alembic upgrade head
-
-# ② 启动后端 API（这一步才是“启动后端”）
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-# API 文档：http://127.0.0.1:8000/docs
-# 健康检查：http://127.0.0.1:8000/api/v1/health
+
+# 终端 3：前端
+cd frontend
+npm run dev
 ```
 
-### 终端 3：前端
+- `alembic upgrade head`：只升级数据库表结构，**不是启动后端**；
+- `uvicorn`：启动后端 API（8000）；
+- `npm run dev`：启动前端（5173，代理 /api 到 8000）。
 
-```powershell
-cd E:\VScode\Mousehole\frontend
-npm run dev                        # http://localhost:5173（Vite 代理 /api 到后端）
-# 生产构建预览：npm run build; npm run preview
-```
+### Token 预算概念（排错/调优用）
 
-### Docker 运行（Phase 4）
+| 概念 | 由谁限制 | 当前值 | 作用 |
+|---|---|---|---|
+| 模型上下文窗口 | Provider/模型，硬上限 | DeepSeek 1,000,000 | 一次请求输入+输出的总 token 上限 |
+| `context_budget_tokens` | mousehole 应用配置 | 200,000 | 应用允许准备多少输入上下文；不是 API 参数 |
+| Chat 文件预算 | mousehole 应用配置 | 64,000 | 输入中专门给文件正文的额度，不是模型窗口 |
+| `max_tokens` | 请求参数/Provider | 默认 4,096 | **输出**最多生成多少 token，与读文件无关 |
 
-生产模式（Nginx 托管前端 + Backend + PostgreSQL，数据持久化到仓库下的 storage/、data/）：
+- Chat 文件预算公式：`max(4000, min(64000, context_budget_tokens - 6000))`；
+- 文件 ≤2MB 默认读取全文；只有所有文件总量超预算时才截断，并提示用 `read_task_file` 分页读取；
+- 把 `max_tokens` 调大不会让模型多读文件，只会让回答能写更长；调小可能截断回答。
 
-```powershell
-cd E:\VScode\Mousehole
-copy .env.example .env
-docker compose up -d --build
-# 前端：http://localhost:8090（可用 MOUSEHOLE_HTTP_PORT 覆盖）；后端：http://localhost:8000（调试）
-```
+### 数据在哪里？
 
-开发模式（Vite dev + FastAPI --reload + PostgreSQL）：
+| 数据 | 位置 |
+|---|---|
+| 数据库（Task/Message/Artifact/Execution/Skill 等） | Docker 卷 `mousehole_pgdata`（不要 `down -v`） |
+| 上传的原始文件（Library） | 仓库下 `storage/` |
+| Provider 配置/API Key | 仓库下 `data/provider_config.json`（明文，勿提交/外发） |
+| 备份 | `backups/<timestamp>/` |
 
-```powershell
-docker compose -f docker-compose.dev.yml up -d
-# 前端：http://localhost:5173；后端：http://localhost:8000
-```
+### 常见问题
 
-两种模式共用 project name 与数据卷，**不要同时启动**。
+| 现象 | 原因/处理 |
+|---|---|
+| 8090 打不开 | Docker Desktop 未启动，或容器未运行：`docker compose ps` / `docker compose up -d` |
+| 8090 是旧界面 | 改代码后没有重建：`docker compose up -d --build`，再 Ctrl+F5 |
+| 8080 被占用 | 本项目默认就是 8090；可用 `MOUSEHOLE_HTTP_PORT` 改端口 |
+| 后端连接数据库失败 | PostgreSQL 容器未 healthy；`docker compose logs postgres` |
+| 想换数据库密码 | 修改 `.env` 的 POSTGRES_PASSWORD 与 DATABASE_URL 后重建；旧数据卷密码不会自动变 |
+| 端口冲突/多项目 | 不要同时启动生产与开发 compose；确认 8090/8000/5433 未被占用 |
+| 数据备份 | 见下方「备份与恢复」 |
 
 ### 备份与恢复（Phase 4）
 
@@ -206,7 +308,7 @@ npm run test:e2e
 
 首次启动时后端会自动创建默认 Workspace；`.env` 可选（复制 `.env.example` 即可，默认值可直接跑通），但 `.env` 永不入库。
 
-## 已实现 API（Phase 1–3）
+## 已实现 API（Phase 1–4）
 
 | 领域 | 端点 |
 |---|---|
@@ -215,7 +317,7 @@ npm run test:e2e
 | Project | `GET/POST /projects`、`GET/PATCH /projects/{id}`、`GET/POST /projects/{id}/files`、`DELETE /projects/{id}/files/{file_id}` |
 | Task | `GET/POST /tasks`、`GET/PATCH /tasks/{id}`（禁止改 project_id，返回 422） |
 | File | `POST /files`（multipart）、`GET /files`、`GET/DELETE /files/{id}`、`GET /files/{id}/content` |
-| Task 文件上下文 | `GET/POST /tasks/{id}/files`、`DELETE /tasks/{id}/files/{file_id}` |
+| Task 文件上下文 | `GET/POST /tasks/{id}/files`、`DELETE /tasks/{id}/files/{file_id}`、`POST /tasks/{id}/files/upload`（临时文件，不进 Library） |
 | 对话（Phase 2） | `GET /tasks/{id}/messages`、`POST /tasks/{id}/messages`（SSE 流式） |
 | 模型 Provider | `GET/PUT /providers`、`POST /providers/{name}/test`（测试连接并自动发现模型） |
 | 模型列表 | `GET /models` |
@@ -268,7 +370,7 @@ npm run test:e2e
 - **统一成果来源**：Artifact 记录 `source_type`（execution / chat）与 `source_message_id`，聊天产生的成果与 Execution 成果共用版本体系
 - **Execution 降级为工程实体**：UI 不再单独展示 Execution 栏与 ID；Artifact 独立于 Execution；执行进度以 Chat 内「工作进度 / 运行详情」折叠面板呈现
 - **工具调用可见性**：非流式工具预调用与流式生成期间每 2 秒发送 `thinking` 心跳；Chat 增加可折叠「工作详情」，并持续显示「思考中 / 生成中 Ns」计时
-- **Chat 文件上下文**：普通对话会把 Task 可用文件（项目继承 / 额外引用）按预算（默认 12k tokens、单文件 8k 字符）节选进上下文，并给出文件清单；需要全文时可调用 `read_task_file`
+- **Chat 文件上下文**：普通对话默认读取 Task 可用文件全文（≤2MB，无单文件 8k 字符截断）；文件预算默认最多 64k tokens，仅当总量超预算时才截断并提示 `read_task_file` 分页读取；始终给出文件清单
 - **输入栏附件**：临时上传的文件发送后即从输入栏清除（仍作为 Task 可用上下文参与后续对话）；Skill 按消息临时生效
 - **消息级追溯**：Message 记录 `metadata`；用户消息标注本次临时引入的 Skill 与文件（来源/是否超预算），助手消息记录工具步骤与耗时，UI 在每条消息顶部展示默认折叠的「思路链」
 - **大文件策略**：单个文件 >2MB 不自动展开进对话上下文，`read_task_file` 会明确提示"文件过大"而不是长时间阻塞；上传上限默认 25MB（`MAX_UPLOAD_MB`）
@@ -279,6 +381,10 @@ npm run test:e2e
 - **思路链**：每条助手消息顶部展示默认折叠的「思路链」（工具步骤、结果、耗时）；Chat 内不再出现 Artifact 界面
 - **成果操作**：Artifacts 页支持版本切换、下载 Markdown、删除单版本（删除当前版本自动指向上一版本）
 - **大文件分页**：`read_task_file` 支持 `offset/limit`（每次最多 40000 字符），返回 total_chars/next_offset/has_more
+- **Task 临时文件**：Chat「+」上传的文件只随**发送的那一轮消息**进入模型上下文，不写入 Task 可用文件，后续轮次不会自动带上；不显示在 Library，删除 Task/移除附件时清理
+- **文件内容预览**：Project Files 与 Task Settings 中可直接预览 PDF/Markdown/TXT 解析文本
+- **默认读取全文**：Chat 默认把 ≤2MB 的文件完整放入上下文（无单文件 8k 字符截断）；文件预算随 Workspace context budget 自动调整（默认最多 64k tokens），只有总量超预算时才截断并提示用 `read_task_file` 分页读取
+- **真实 SSE**：最终回答统一走流式生成；工具意图（保存/读取/执行等）先走非流式工具 pre-pass 决定/执行工具，完成后最终回答仍会重新以 SSE 增量输出
 - **工具 Schema 工厂**：`_wrap(name, description, properties, required)` 生成 TOOLS_SPEC，系统提示从 TOOL_SPECS 动态渲染，不再硬编码工具清单
 
 ## 开发路线
@@ -287,8 +393,8 @@ npm run test:e2e
 |---|---|---|
 | Phase 1 | 工程基础与核心数据管理（Workspace / Project / Task / File / 解析 / 继承规则） | 已完成（已验收） |
 | Phase 2 | Conversation 与模型接入（Provider、流式、模型选择、usage） | 已完成（已验收） |
-| Phase 3 | Execution 与 Artifact 核心闭环 + Skill / 受控工具 / 消息级追溯 | 已完成（待最终验收） |
-| Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、备份、文档） | 进行中 |
+| Phase 3 | Execution 与 Artifact 核心闭环 + Skill / 受控工具 / 消息级追溯 | 已完成（已验收） |
+| Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、备份、文档） | 已完成（MVP 验收通过） |
 
 每个 Phase 结束后由用户人工验收，通过后进入下一阶段。开发过程遵循 [AGENTS.md](AGENTS.md)；Git 提交由用户负责。
 
