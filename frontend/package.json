@@ -7,7 +7,8 @@
     "dev": "vite --configLoader native",
     "build": "vue-tsc --noEmit && vite build --configLoader native",
     "preview": "vite preview --configLoader native",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "pinia": "^2.3.1",
@@ -15,6 +16,7 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "~5.7.2",
     "vite": "^6.0.7",

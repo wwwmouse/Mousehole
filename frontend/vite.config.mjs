@@ -148,6 +148,8 @@ function defineFallbackPlugin() {
   }
 }
 
+const apiProxyTarget = process.env.VITE_API_PROXY || 'http://127.0.0.1:8000'
+
 const { defineConfig } = await import('vite')
 const vue = (await import('@vitejs/plugin-vue')).default
 
@@ -193,7 +195,7 @@ export default defineConfig(() => ({
     host: '::',
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },
@@ -203,7 +205,7 @@ export default defineConfig(() => ({
     host: '::',
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },
