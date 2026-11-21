@@ -744,6 +744,21 @@ Agent 必须遵守已经批准的产品规格、数据模型、技术决策和�
 
 ---
 
+## 18. Phase 4 实装补充决策
+
+1. **Home 统计口径**：对话轮数 = 用户消息条数；Token = Assistant Message usage + Execution usage；两类记录对应不同模型调用，不重复计数；缺失 usage 标记不完整，不估算。
+2. **不引入用户体系**：Home 使用通用问候语，不新增 User 实体或 Workspace.display_name 字段。
+3. **对话历史**：MVP 保留 Task ↔ Conversation 1:1，不支持清空/新建对话；上下文预算与历史条数限制长对话。
+4. **Execution 历史**：Chat 内以默认折叠「历史运行」呈现，使用状态/时间/Skill 描述，不突出 Execution ID；详细阶段按需展开。
+5. **备份恢复**：提供 `scripts/backup.ps1` / `scripts/restore.ps1`（pg_dump + storage 归档）；默认不备份 Provider 凭证；恢复需人工确认。
+6. **Docker 交付**：生产模式 = Nginx(frontend) + backend + PostgreSQL；开发模式 = Vite dev + FastAPI --reload + PostgreSQL；数据通过 `storage/`、`data/` 与 pgdata 卷持久化。
+7. **E2E**：使用 Playwright 覆盖核心闭环（Mock API/Provider）；新增依赖需用户批准后安装。
+8. **Library 范围**：文件名搜索 + 类型筛选 + 基础排序；不做完整文件引用列表，但删除前必须检查引用与历史使用。
+9. **不扩大 MVP 范围**：优先核心闭环、交互质量、Docker 交付与可靠性。
+
+
+---
+
 ## 17. Phase 3 实装补充决策
 
 1. **受控工具调用**：工具 schema 由 `_wrap(name, description, properties, required)` 工厂生成；`TOOLS_SPEC` 是唯一 allowlist；系统提示中的工具说明由 `tool_prompt()` 从 TOOLS_SPEC 动态生成，禁止硬编码工具清单。工具只能访问当前 Task 的文件、Artifact 与 Execution，无任意文件系统/Shell/外部写权限。

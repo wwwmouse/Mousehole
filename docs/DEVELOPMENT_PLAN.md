@@ -200,6 +200,25 @@ MVP 开发压缩为四个 Phase。
 - 工具调用依赖模型能力，Artifact 兜底仅覆盖明确"保存/导出"意图。
 - 无用户自定义 Skill/Workflow，Skill 仅代码/数据库基础字段。
 
+**Phase 4 实现决策（已确认）**
+
+- Home 统计：轮数 = 用户消息条数；Token = Assistant Message usage + Execution usage（互不重复）；缺失 usage 标记不完整。
+- 问候语使用通用称呼，不新增 User 实体或 Workspace 显示名称字段。
+- 对话历史：暂不支持清空/新建对话，保留 Task 与 Conversation 1:1；通过上下文预算与历史条数控制长对话。
+- Execution 历史：Chat 内默认折叠的「历史运行」，用状态/时间/模型表达，不展示 Execution ID；详细步骤按需展开。
+- 备份恢复：scripts/backup.ps1 / scripts/restore.ps1，覆盖 PostgreSQL + storage，默认不备份 Provider 凭证；实际验证完整恢复。
+- Docker：生产模式 Nginx + Frontend + Backend + PostgreSQL；开发模式 Vite + FastAPI 热更新 + PostgreSQL；数据持久化。
+- E2E：Playwright 覆盖一条核心业务闭环（Mock Provider/API）；新增依赖需用户批准。
+- Project Overview：轻量概览 + 最近活动；Library 支持文件名搜索、类型筛选、基础排序；不做完整文件引用列表，但删除前检查引用与历史使用。
+- 不扩大 MVP 范围；优先核心闭环、交互、Docker 与可靠性。
+
+**Phase 4 实施进度（2026-11-21）**
+
+- 已完成：Home 统计与最近成果、Project Overview、Library 类型筛选/排序、Chat 运行历史、Docker 生产/开发 compose、备份恢复脚本。
+- 已验证：生产 compose 构建并启动（frontend 8090 / backend 8000 / postgres 5433），nginx 反代与统计接口正常；backup.ps1 生成 database.sql/storage.tar.gz/manifest.json；restore.ps1 完整恢复后 tasks/messages/artifacts/files 行数与备份前一致。
+- 已验证：Playwright E2E 核心闭环通过（Mock API，上传 → Project → Task → Chat → 成果下载/删除）。
+- 待完成：开发 compose 运行验证、浏览器人工验收、文档收尾。
+
 #### Phase 4：完整 UI、系统集成与 MVP 验收
 
 **目标：将核心能力整合成一个可以日常使用的本地 AI Workspace。**

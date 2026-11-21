@@ -9,8 +9,8 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：Phase 1、Phase 2 已验收；Phase 3（Execution / Artifact 闭环 + Skill Library + Chat 受控工具 + 消息级追溯）已完成，待最终人工验收。
-下一个交付点 = Phase 4「完整 UI、系统集成与 MVP 验收」。
+当前状态：Phase 1–3 已完成（Phase 3 待最终验收）；Phase 4 已完成主要交付（统计/Overview/筛选/运行历史、Docker 生产栈、备份恢复、Playwright E2E），待开发 compose 验证与人工验收。
+下一个交付点 = Phase 4 完成验收。
 
 ## 2. 开工前必读（按顺序）
 

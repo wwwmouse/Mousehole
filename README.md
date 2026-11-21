@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**当前状态：Phase 3 已完成（待最终验收）。** Phase 1、Phase 2 已验收；Phase 3 覆盖 Execution / Artifact 核心闭环，以及 Skill Library、Chat 受控工具调用、统一成果来源、消息级思路链、输入框内模型控制等能力；后端 97 个自动化测试通过，前端构建通过，并已用真实模型完成端到端验证。下一步进入 **Phase 4：完整 UI、系统集成与 MVP 验收**。
+**当前状态：Phase 4 进行中（MVP 最后阶段）。** Phase 1–3 已完成；Phase 3 覆盖 Execution / Artifact、Skill Library、Chat 受控工具、统一成果来源、消息级思路链与模型控制。Phase 4 正在补齐 Home 统计、Project Overview、Library 筛选、运行历史、Docker 交付与备份恢复。
 
 ---
 
@@ -149,12 +149,58 @@ npm run dev                        # http://localhost:5173（Vite 代理 /api �
 # 生产构建预览：npm run build; npm run preview
 ```
 
+### Docker 运行（Phase 4）
+
+生产模式（Nginx 托管前端 + Backend + PostgreSQL，数据持久化到仓库下的 storage/、data/）：
+
+```powershell
+cd E:\VScode\Mousehole
+copy .env.example .env
+docker compose up -d --build
+# 前端：http://localhost:8090（可用 MOUSEHOLE_HTTP_PORT 覆盖）；后端：http://localhost:8000（调试）
+```
+
+开发模式（Vite dev + FastAPI --reload + PostgreSQL）：
+
+```powershell
+docker compose -f docker-compose.dev.yml up -d
+# 前端：http://localhost:5173；后端：http://localhost:8000
+```
+
+两种模式共用 project name 与数据卷，**不要同时启动**。
+
+### 备份与恢复（Phase 4）
+
+```powershell
+# 备份 PostgreSQL + storage（默认不备份 data/provider_config.json）
+.\scripts\backup.ps1
+
+# 恢复（覆盖当前数据库与 storage）
+.\scripts\restore.ps1 -BackupDir .\backups\20260101-120000
+```
+
+备份位于 backups/<timestamp>/：database.sql、storage.tar.gz、manifest.json；恢复后需重新填写 Provider API Key。
+
+### 前端 E2E（Phase 4）
+
+前置：Docker 生产栈已启动（前端 8090）；E2E 全部使用 Mock API，不调用真实模型、不产生费用。
+
+```powershell
+cd frontend
+npm run test:e2e
+```
+
+- 测试文件：`frontend/e2e/core-flow.spec.ts`，覆盖「上传文件 → 建 Project → 建 Task → 发消息 → 保存成果 → 下载/删除」；
+- 默认使用系统 Microsoft Edge（`channel: 'msedge'`），避免下载 Chromium；如目标机器无 Edge，可执行 `npx playwright install chromium` 并调整 `playwright.config.ts`；
+- 如前端不在 8090：`$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5173'; npm run test:e2e`。
+
 ### 常用命令
 
 | 目的 | 命令 |
 |---|---|
 | 后端测试 | `cd backend; .\.venv\Scripts\python.exe -m pytest tests -q` |
 | 前端类型检查 + 构建 | `cd frontend; npm run build` |
+| 前端 E2E（Mock API） | `cd frontend; npm run test:e2e` |
 | 升级数据库结构 | `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head` |
 | 查看当前迁移版本 | `cd backend; .\.venv\Scripts\python.exe -m alembic current` |
 
@@ -173,6 +219,7 @@ npm run dev                        # http://localhost:5173（Vite 代理 /api �
 | 对话（Phase 2） | `GET /tasks/{id}/messages`、`POST /tasks/{id}/messages`（SSE 流式） |
 | 模型 Provider | `GET/PUT /providers`、`POST /providers/{name}/test`（测试连接并自动发现模型） |
 | 模型列表 | `GET /models` |
+| 首页统计（Phase 4） | `GET /stats/overview?days=7` |
 | Skill Library | `GET/POST /skills`、`PATCH/DELETE /skills/{id}`、`GET/POST /tasks/{id}/skills`、`DELETE /tasks/{id}/skills/{skill_id}` |
 | Skill 资料 | `GET/POST /skills/{id}/files`、`DELETE /skills/{id}/files/{file_id}` |
 | 执行（Phase 3） | `POST/GET /tasks/{id}/executions`、`GET /executions/{id}`、`POST /executions/{id}/cancel`、`GET /executions/{id}/events`（SSE） |
@@ -241,7 +288,7 @@ npm run dev                        # http://localhost:5173（Vite 代理 /api �
 | Phase 1 | 工程基础与核心数据管理（Workspace / Project / Task / File / 解析 / 继承规则） | 已完成（已验收） |
 | Phase 2 | Conversation 与模型接入（Provider、流式、模型选择、usage） | 已完成（已验收） |
 | Phase 3 | Execution 与 Artifact 核心闭环 + Skill / 受控工具 / 消息级追溯 | 已完成（待最终验收） |
-| Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、文档） | 下一步 |
+| Phase 4 | 完整 UI、系统集成与 MVP 验收（Docker、持久化、备份、文档） | 进行中 |
 
 每个 Phase 结束后由用户人工验收，通过后进入下一阶段。开发过程遵循 [AGENTS.md](AGENTS.md)；Git 提交由用户负责。
 

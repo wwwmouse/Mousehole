@@ -1110,6 +1110,16 @@ Agent 可以提出架构优化建议，但不能未经批准直接：
 
 ---
 
+## 18. Phase 4 实装补充
+
+- 新增只读统计聚合（stats 模块）：汇总最近 7 天用户消息数、Assistant Message usage 与 Execution usage、最近成果；不新增业务表。
+- Home / Project Overview / Library 筛选为前端聚合或复用现有 API；不引入新服务。
+- Docker：生产 compose（Nginx + backend + postgres）与开发 compose（Vite + FastAPI --reload + postgres）共享同一 project name、数据卷与 storage 目录。
+- 备份/恢复：脚本层（pg_dump + storage tar），不进入应用运行时；凭证默认不备份。
+
+
+---
+
 ## 17. Phase 3 实装补充：Skill、受控工具与消息追溯
 
 ### 17.1 新增模块与职责
