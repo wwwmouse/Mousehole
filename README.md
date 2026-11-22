@@ -117,6 +117,7 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 
 ## 文档
 
+- [项目学习笔记：架构与 Agent 开发](docs/PROJECT_LEARNING_GUIDE.md)
 - [产品与 MVP 范围](docs/PRODUCT_SPEC.md) · [MVP 规范](docs/MVP_SPEC.md)
 - [数据模型](docs/DATA_MODEL.md) · [技术决策](docs/TECHNICAL_DECISIONS.md)
 - [架构](docs/ARCHITECTURE.md) · [UI 规范](docs/UI_SPEC.md)

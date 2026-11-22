@@ -3,7 +3,8 @@
 **项目名称：** mousehole  
 **文档版本：** v0.1  
 **文档定位：** 系统架构设计，定义系统模块、职责边界、依赖关系和核心业务流程。  
-**关联文档：** `PRODUCT_SPEC.md`、`MVP_SPEC.md`、`DATA_MODEL.md`、`TECHNICAL_DECISIONS.md`
+**关联文档：** `PRODUCT_SPEC.md`、`MVP_SPEC.md`、`DATA_MODEL.md`、`TECHNICAL_DECISIONS.md`  
+**学习文档：** 想从开发角度理解目录与 Agent 流程，先读 [PROJECT_LEARNING_GUIDE.md](PROJECT_LEARNING_GUIDE.md)
 
 ---
 
