@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
 
 .model-controls__hint {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-faint);
 }

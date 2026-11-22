@@ -296,7 +296,7 @@ function onClose(): void {
 }
 
 .file-row__meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 

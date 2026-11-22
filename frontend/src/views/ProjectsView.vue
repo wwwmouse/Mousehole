@@ -234,7 +234,7 @@ onMounted(() => {
 .toolbar__count {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }

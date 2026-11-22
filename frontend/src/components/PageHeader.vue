@@ -55,7 +55,7 @@ withDefaults(
   margin-bottom: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   transition: color 0.15s ease;
@@ -75,9 +75,9 @@ withDefaults(
 .page-header__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: 36px;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }

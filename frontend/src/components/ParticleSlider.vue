@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
 }
 
 .pslider__hint {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text-faint);
 }
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
 .pslider__bounds {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 </style>

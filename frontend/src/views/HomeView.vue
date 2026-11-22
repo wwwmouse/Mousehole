@@ -521,7 +521,7 @@ onMounted(() => {
 .hero__date {
   margin: 0 0 10px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   text-transform: uppercase;
   color: var(--text-secondary);
   letter-spacing: 0.1em;
@@ -530,9 +530,9 @@ onMounted(() => {
 .hero__greeting {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: 46px;
   font-weight: 600;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   line-height: 1.08;
 }
 
@@ -595,7 +595,7 @@ onMounted(() => {
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.03em;
   cursor: pointer;
 }
@@ -618,7 +618,7 @@ onMounted(() => {
 
 .overview-panel__eyebrow {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -648,7 +648,7 @@ onMounted(() => {
 .overview-panel__note {
   margin: 10px 0 0;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.03em;
   color: var(--text-muted);
   line-height: 1.5;
@@ -753,7 +753,7 @@ onMounted(() => {
   align-items: center;
   gap: 3px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -765,7 +765,7 @@ onMounted(() => {
 
 .section-caption {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
@@ -808,7 +808,7 @@ onMounted(() => {
   padding: 0 2px 9px;
   border-bottom: 1px solid var(--border);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -858,7 +858,7 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
@@ -928,7 +928,7 @@ onMounted(() => {
 }
 
 .recent-row__meta {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;

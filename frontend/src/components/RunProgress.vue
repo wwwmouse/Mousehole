@@ -264,7 +264,7 @@ onBeforeUnmount(stopPolling)
 .run-progress__time {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
@@ -299,7 +299,7 @@ onBeforeUnmount(stopPolling)
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -324,7 +324,7 @@ onBeforeUnmount(stopPolling)
 
 .run-progress__step-status {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -336,7 +336,7 @@ onBeforeUnmount(stopPolling)
 
 .run-progress__history-summary {
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   user-select: none;
 }
@@ -360,7 +360,7 @@ onBeforeUnmount(stopPolling)
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -397,7 +397,7 @@ onBeforeUnmount(stopPolling)
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -410,13 +410,13 @@ onBeforeUnmount(stopPolling)
 
 .run-progress__meta {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
 .run-progress__error {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--danger);
 }
 </style>

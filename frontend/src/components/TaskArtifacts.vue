@@ -367,7 +367,7 @@ onMounted(() => {
 
 .artifacts-preview__meta {
   margin: 4px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 

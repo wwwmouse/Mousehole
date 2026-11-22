@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
 .toolbar__count {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
@@ -506,7 +506,7 @@ onBeforeUnmount(() => {
   text-align: left;
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -592,7 +592,7 @@ onBeforeUnmount(() => {
 }
 
 .preview-meta__item {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -605,7 +605,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 

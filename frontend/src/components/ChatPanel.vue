@@ -9,12 +9,14 @@ import ModelControls from '@/components/ModelControls.vue'
 import RunProgress from '@/components/RunProgress.vue'
 import { streamTaskChat } from '@/api/chat'
 import {
+  getArtifact,
   listSkills,
   listTaskMessages,
   removeTaskFileOverride,
   uploadTaskTemporaryFile,
 } from '@/api/endpoints'
 import type {
+  Artifact,
   ChatMessage,
   ModelInfo,
   Skill,
@@ -34,6 +36,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'usage-updated': [usage: TaskUsage | null]
   'task-updated': [task: Task]
+  'open-artifacts': []
 }>()
 
 const app = useAppStore()
@@ -63,6 +66,7 @@ const toolEvents = ref<
   { name: string; status: 'running' | 'ok' | 'error'; summary: string }[]
 >([])
 const runRefreshKey = ref(0)
+const turnArtifacts = ref<Artifact[]>([])
 const thinking = ref(false)
 const elapsed = ref(0)
 let thinkingTimer: ReturnType<typeof setInterval> | null = null
@@ -206,6 +210,20 @@ function goSkillLibrary(): void {
   void router.push('/skills')
 }
 
+async function loadTurnArtifacts(ids: string[]): Promise<void> {
+  try {
+    const items = await Promise.all(ids.map((id) => getArtifact(id)))
+    turnArtifacts.value = items
+    app.notify('success', '本轮生成了 ' + items.length + ' 个成果')
+  } catch {
+    turnArtifacts.value = []
+  }
+}
+
+function openArtifacts(): void {
+  emit('open-artifacts')
+}
+
 async function send(): Promise<void> {
   const content = input.value.trim()
   if (!content || sending.value) return
@@ -221,6 +239,7 @@ async function send(): Promise<void> {
   streamError.value = null
   streamText.value = ''
   toolEvents.value = []
+  turnArtifacts.value = []
   thinking.value = false
   elapsed.value = 0
   menuOpen.value = false
@@ -305,6 +324,9 @@ async function send(): Promise<void> {
           if (data.executions.length) {
             runRefreshKey.value += 1
             app.notify('info', '已启动执行')
+          }
+          if (data.artifacts.length) {
+            void loadTurnArtifacts(data.artifacts)
           }
         },
       },
@@ -502,6 +524,19 @@ onBeforeUnmount(() => {
           </div>
         </article>
       </div>
+    </div>
+
+    <div v-if="turnArtifacts.length" class="artifact-receipt" role="status">
+      <span class="artifact-receipt__icon"><AppIcon name="file" :size="18" /></span>
+      <div class="artifact-receipt__body">
+        <p class="artifact-receipt__title">本轮生成了 {{ turnArtifacts.length }} 个成果</p>
+        <p class="artifact-receipt__meta">
+          {{ turnArtifacts.map((item) => item.title).join(' · ') }}
+        </p>
+      </div>
+      <button type="button" class="btn btn--primary btn--sm" @click="openArtifacts">
+        查看成果
+      </button>
     </div>
 
     <div v-if="streamError" class="panel panel--error chat-error">
@@ -718,7 +753,7 @@ onBeforeUnmount(() => {
 
 .chat-message__role {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -730,7 +765,7 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-faint);
 }
@@ -767,7 +802,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   user-select: none;
 }
@@ -785,7 +820,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -813,7 +848,7 @@ onBeforeUnmount(() => {
 
 .thought-chain__direct {
   margin: 6px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -826,7 +861,7 @@ onBeforeUnmount(() => {
 
 .chip__hint {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .work-log {
@@ -846,7 +881,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   user-select: none;
 }
@@ -868,7 +903,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -898,6 +933,64 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.artifact-receipt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 18px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-raised));
+  box-shadow: 0 8px 28px rgba(201, 122, 74, 0.14);
+  animation: receipt-in 0.22s ease-out;
+}
+
+.artifact-receipt__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1b120d;
+}
+
+.artifact-receipt__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.artifact-receipt__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.artifact-receipt__meta {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes receipt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .chat-error {
   margin: 0;
 }
@@ -922,7 +1015,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-subtle);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -1051,7 +1144,7 @@ onBeforeUnmount(() => {
 }
 
 .composer__hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1084,7 +1177,7 @@ onBeforeUnmount(() => {
 
 .skill-picker__label {
   margin: 10px 0 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1129,7 +1222,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-picker__desc {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1155,7 +1248,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-usage__detail {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 

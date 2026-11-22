@@ -106,7 +106,7 @@ watch(
   padding-bottom: 10px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 

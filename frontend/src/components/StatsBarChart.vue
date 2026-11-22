@@ -83,7 +83,7 @@ function barHeight(value: number): string {
   width: 36px;
   padding-bottom: 20px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   line-height: 1;
   color: var(--text-muted);
@@ -142,7 +142,7 @@ function barHeight(value: number): string {
   background: var(--bg-raised);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.01em;
   white-space: nowrap;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -189,7 +189,7 @@ function barHeight(value: number): string {
   height: 20px;
   padding-top: 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.01em;
   color: var(--text-secondary);
   text-align: center;

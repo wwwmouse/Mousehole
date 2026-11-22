@@ -95,7 +95,7 @@ const icons: Record<string, string> = {
 .toast__detail {
   margin: 3px 0 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   overflow-wrap: anywhere;
 }

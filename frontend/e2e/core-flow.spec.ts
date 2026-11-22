@@ -66,9 +66,10 @@ test('core closed loop: upload file -> create project -> task -> chat -> artifac
   // Mock SSE returns an artifact and a normal assistant reply.
   await expect(page.getByText('这是 Mock 生成的核心闭环成果。')).toBeVisible()
   await expect(page.getByText('思路链')).toBeVisible()
+  await expect(page.locator('.artifact-receipt')).toContainText('本轮生成了 1 个成果')
 
-  // 4) Open Artifacts, preview and download the artifact.
-  await page.getByRole('tab').filter({ hasText: 'Artifacts' }).click()
+  // 4) Open Artifacts from the receipt, preview and download the artifact.
+  await page.getByRole('button', { name: '查看成果' }).click()
   await expect(page.locator('.artifacts-series__title', { hasText: 'E2E 系列' })).toBeVisible()
   await expect(
     page.locator('.artifacts-preview__title', { hasText: 'E2E 成果' }),

@@ -480,13 +480,13 @@ onMounted(() => {
 }
 
 .field__hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
   line-height: 1.5;
 }
 
 .field__error {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--danger);
 }
 
@@ -547,7 +547,7 @@ onMounted(() => {
 
 .kv__mono {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .disabled-form {
@@ -565,7 +565,7 @@ onMounted(() => {
   padding: 11px 13px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -650,7 +650,7 @@ onMounted(() => {
 }
 
 .provider-test {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .provider-test--ok {

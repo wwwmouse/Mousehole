@@ -539,6 +539,7 @@ onMounted(() => {
             :models="models"
             @usage-updated="onUsageUpdated"
             @task-updated="task = $event"
+            @open-artifacts="activeTab = 'artifacts'"
           />
         </div>
       </section>
@@ -741,11 +742,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
 }
 
 .crumb {
@@ -779,9 +779,9 @@ onMounted(() => {
 .task-head__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 38px;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
@@ -809,8 +809,8 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  letter-spacing: 0.02em;
   color: var(--text-muted);
 }
 
@@ -829,7 +829,7 @@ onMounted(() => {
 }
 
 .status-select__label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -850,8 +850,8 @@ onMounted(() => {
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
   transition: color 0.14s ease;
@@ -960,7 +960,7 @@ onMounted(() => {
 }
 
 .composer__hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1008,7 +1008,7 @@ onMounted(() => {
 }
 
 .context-stat__label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1037,7 +1037,7 @@ onMounted(() => {
 
 .context-desc {
   margin: 4px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -1124,7 +1124,7 @@ onMounted(() => {
 }
 
 .file-item__meta {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1137,7 +1137,7 @@ onMounted(() => {
 }
 
 .model-info__label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1148,7 +1148,7 @@ onMounted(() => {
 }
 
 .model-info__hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1252,7 +1252,7 @@ onMounted(() => {
   padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 

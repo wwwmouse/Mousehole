@@ -416,9 +416,9 @@ onMounted(() => {
 .page-head__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: 36px;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
   line-height: 1.15;
 }
 
@@ -569,7 +569,7 @@ onMounted(() => {
 
 .skill-assets__hint {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -588,7 +588,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -605,7 +605,7 @@ onMounted(() => {
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }

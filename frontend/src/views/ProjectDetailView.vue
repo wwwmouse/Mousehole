@@ -639,7 +639,7 @@ onMounted(() => {
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
   transition: color 0.14s ease;
 }
@@ -658,7 +658,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--bg-active);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 17px;
 }
 
@@ -697,7 +697,7 @@ onMounted(() => {
 }
 
 .overview-card__label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -719,7 +719,7 @@ onMounted(() => {
 
 .overview-subtitle {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -766,7 +766,7 @@ onMounted(() => {
 }
 
 .overview-row__meta {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -833,7 +833,7 @@ onMounted(() => {
 }
 
 .item-row__meta {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -862,7 +862,7 @@ onMounted(() => {
   padding: 10px 14px;
   text-align: left;
   font-weight: 500;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
   background: var(--bg-subtle);
   border-bottom: 1px solid var(--border);

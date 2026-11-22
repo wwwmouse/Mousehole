@@ -190,7 +190,7 @@ onMounted(() => {
 
 .brand-sub {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -316,7 +316,7 @@ onMounted(() => {
 }
 
 .workspace-chip__label {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-faint);
@@ -392,10 +392,10 @@ onMounted(() => {
 
 .topbar-title {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 600;
   color: var(--text);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .topbar-right {
@@ -407,7 +407,7 @@ onMounted(() => {
 
 .topbar-edition {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-faint);
