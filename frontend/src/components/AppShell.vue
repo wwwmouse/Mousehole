@@ -58,7 +58,10 @@ onMounted(() => {
             <circle cx="12" cy="13.4" r="3.4" fill="none" stroke="var(--accent)" stroke-width="1.8" />
             <path d="M7.2 8.6c1.5-1.3 3.1-1.9 4.8-1.9s3.3.6 4.8 1.9" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" />
           </svg>
-          <span class="brand-name">mousehole</span>
+          <span class="brand-copy">
+            <span class="brand-name">mousehole</span>
+            <span class="brand-sub">personal workbench</span>
+          </span>
         </RouterLink>
         <button
           type="button"
@@ -110,7 +113,7 @@ onMounted(() => {
           <span class="topbar-title">{{ pageTitle }}</span>
         </div>
         <div class="topbar-right">
-          <span class="topbar-workspace" :title="workspaceTitle">{{ workspaceLabel }}</span>
+          <span class="topbar-edition">LOCAL / 1.0</span>
         </div>
       </header>
 
@@ -151,7 +154,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 14px 14px 14px 16px;
+  padding: 16px 14px 16px 18px;
   border-bottom: 1px solid var(--border);
   min-height: var(--topbar-height);
 }
@@ -168,12 +171,30 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .brand-name {
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 18px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   white-space: nowrap;
   color: var(--text);
+}
+
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .sidebar-collapse {
@@ -217,10 +238,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 13px;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   transition:
     background 0.14s ease,
@@ -234,7 +256,8 @@ onMounted(() => {
 
 .nav-item--active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .nav-item__icon {
@@ -259,10 +282,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-raised);
+  background: transparent;
   min-width: 0;
 }
 
@@ -337,10 +360,10 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   height: var(--topbar-height);
-  padding: 0 28px;
+  padding: 0 32px;
   border-bottom: 1px solid var(--border);
-  background: rgba(17, 20, 25, 0.88);
-  backdrop-filter: blur(8px);
+  background: rgba(29, 25, 22, 0.9);
+  backdrop-filter: blur(10px);
 }
 
 .topbar-left {
@@ -368,10 +391,11 @@ onMounted(() => {
 }
 
 .topbar-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.01em;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .topbar-right {
@@ -381,24 +405,19 @@ onMounted(() => {
   min-width: 0;
 }
 
-.topbar-workspace {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-raised);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 260px;
+.topbar-edition {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 .app-content {
   flex: 1;
   width: 100%;
-  max-width: 1240px;
-  padding: 28px 32px 64px;
+  max-width: 1160px;
+  padding: 36px 40px 72px;
   margin: 0 auto;
 }
 

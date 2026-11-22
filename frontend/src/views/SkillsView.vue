@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import FilePreviewModal from '@/components/FilePreviewModal.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import Modal from '@/components/Modal.vue'
 import {
@@ -30,9 +32,15 @@ const modalOpen = ref(false)
 const editing = ref<Skill | null>(null)
 const saving = ref(false)
 const form = ref({ name: '', description: '', instruction: '', system_prompt: '' })
+const formSnapshot = ref('')
+const discardOpen = ref(false)
+const formDirty = computed(
+  () => JSON.stringify(form.value) !== formSnapshot.value,
+)
 
 const deleteTarget = ref<Skill | null>(null)
 const deleting = ref(false)
+const previewFileId = ref<string | null>(null)
 
 const attachments = ref<SkillFileInfo[]>([])
 const assetUploading = ref(false)
@@ -95,10 +103,15 @@ async function load(): Promise<void> {
   }
 }
 
+function resetFormSnapshot(): void {
+  formSnapshot.value = JSON.stringify(form.value)
+}
+
 function openCreate(): void {
   editing.value = null
   attachments.value = []
   form.value = { name: '', description: '', instruction: '', system_prompt: '' }
+  resetFormSnapshot()
   modalOpen.value = true
 }
 
@@ -110,8 +123,23 @@ function openEdit(skill: Skill): void {
     instruction: skill.instruction,
     system_prompt: skill.system_prompt,
   }
+  resetFormSnapshot()
   modalOpen.value = true
   void loadAttachments(skill.id)
+}
+
+function requestClose(): void {
+  if (saving.value) return
+  if (formDirty.value) {
+    discardOpen.value = true
+    return
+  }
+  modalOpen.value = false
+}
+
+function discardChanges(): void {
+  discardOpen.value = false
+  modalOpen.value = false
 }
 
 async function submit(): Promise<void> {
@@ -213,20 +241,23 @@ onMounted(() => {
         <header class="skill-card__head">
           <span class="skill-card__icon"><AppIcon name="sparkles" :size="16" /></span>
           <div class="skill-card__title-wrap">
-            <h2 class="skill-card__title">{{ skill.name }}</h2>
+            <h2 class="skill-card__title">
+              <button type="button" class="skill-card__title-button" @click="openEdit(skill)">
+                {{ skill.name }}
+              </button>
+            </h2>
             <span v-if="skill.is_builtin" class="chip chip--muted">内置</span>
           </div>
           <div class="skill-card__actions">
-            <button type="button" class="btn btn--ghost btn--sm" @click="openEdit(skill)">
-              编辑
-            </button>
             <button type="button" class="btn btn--ghost btn--sm" @click="deleteTarget = skill">
               删除
             </button>
           </div>
         </header>
-        <p class="skill-card__desc">{{ skill.description || '（无描述）' }}</p>
-        <p class="skill-card__instruction">{{ skill.instruction }}</p>
+        <button type="button" class="skill-card__content" @click="openEdit(skill)">
+          <span class="skill-card__desc">{{ skill.description || '（无描述）' }}</span>
+          <span class="skill-card__instruction">{{ skill.instruction }}</span>
+        </button>
         <p class="skill-card__meta">更新于 {{ formatDateTime(skill.updated_at) }}</p>
       </li>
     </ul>
@@ -236,7 +267,7 @@ onMounted(() => {
       :title="editing ? '编辑 Skill' : '添加 Skill'"
       width="560px"
       :dismissible="!saving"
-      @close="modalOpen = false"
+      @close="requestClose"
     >
       <div class="form-stack">
         <label class="field">
@@ -284,7 +315,13 @@ onMounted(() => {
           <ul v-else-if="attachments.length" class="skill-assets__list">
             <li v-for="item in attachments" :key="item.file_id" class="skill-assets__item">
               <AppIcon name="file" :size="12" />
-              <span class="skill-assets__path">{{ item.path || item.filename }}</span>
+              <button
+                type="button"
+                class="skill-assets__path skill-assets__path--button"
+                @click="previewFileId = item.file_id"
+              >
+                {{ item.path || item.filename }}
+              </button>
               <button
                 type="button"
                 class="btn btn--ghost btn--sm"
@@ -314,7 +351,7 @@ onMounted(() => {
         </div>
       </div>
       <template #footer>
-        <button type="button" class="btn btn--ghost" :disabled="saving" @click="modalOpen = false">
+        <button type="button" class="btn btn--ghost" :disabled="saving" @click="requestClose">
           取消
         </button>
         <button type="button" class="btn btn--primary" :disabled="saving" @click="submit">
@@ -342,6 +379,21 @@ onMounted(() => {
         </button>
       </template>
     </Modal>
+
+    <FilePreviewModal
+      :file-id="previewFileId"
+      @close="previewFileId = null"
+    />
+
+    <ConfirmDialog
+      :open="discardOpen"
+      title="放弃未保存的修改？"
+      message="当前 Skill 的修改尚未保存。关闭后，这些修改会丢失。"
+      confirm-label="放弃修改"
+      cancel-label="继续编辑"
+      @confirm="discardChanges"
+      @close="discardOpen = false"
+    />
   </div>
 </template>
 
@@ -349,7 +401,7 @@ onMounted(() => {
 .skills-view {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 22px;
 }
 
 .page-head {
@@ -357,18 +409,24 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .page-head__title {
   margin: 0;
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: 30px;
   font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .page-head__desc {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--text-muted);
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
 }
 
 .skill-cards {
@@ -376,18 +434,19 @@ onMounted(() => {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 28px 32px;
 }
 
 .skill-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  padding: 16px 2px 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .skill-card__head {
@@ -415,8 +474,43 @@ onMounted(() => {
 
 .skill-card__title {
   margin: 0;
-  font-size: 13.5px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.skill-card__title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card__title-button:hover {
+  color: var(--accent);
+}
+
+.skill-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card__content:hover .skill-card__desc,
+.skill-card__content:hover .skill-card__instruction {
+  color: var(--text);
 }
 
 .skill-card__actions {
@@ -426,17 +520,20 @@ onMounted(() => {
 }
 
 .skill-card__desc {
+  display: block;
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
 }
 
 .skill-card__instruction {
+  display: block;
   margin: 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  font-size: 11.5px;
+  padding: 8px 0 8px 12px;
+  border-left: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
   display: -webkit-box;
@@ -447,8 +544,8 @@ onMounted(() => {
 
 .skill-card__meta {
   margin: 0;
-  font-size: 10.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .form-stack {
@@ -500,6 +597,21 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-assets__path--button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-assets__path--button:hover {
+  color: var(--accent);
 }
 
 .hidden-input {

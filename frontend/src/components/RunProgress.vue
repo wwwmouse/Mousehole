@@ -198,9 +198,11 @@ onBeforeUnmount(stopPolling)
 
 <style scoped>
 .run-progress {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -209,7 +211,7 @@ onBeforeUnmount(stopPolling)
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px 2px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -248,7 +250,10 @@ onBeforeUnmount(stopPolling)
 }
 
 .run-progress__title {
+  font-family: var(--font-display);
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
@@ -258,8 +263,10 @@ onBeforeUnmount(stopPolling)
 
 .run-progress__time {
   margin-left: auto;
-  font-size: 10.5px;
-  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .run-progress__chevron {
@@ -275,7 +282,7 @@ onBeforeUnmount(stopPolling)
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 12px 10px;
+  padding: 0 2px 12px;
   border-top: 1px solid var(--border);
 }
 

@@ -9,8 +9,9 @@ const props = withDefaults(
     title: string
     width?: string
     dismissible?: boolean
+    zIndex?: number
   }>(),
-  { width: '520px', dismissible: true },
+  { width: '520px', dismissible: true, zIndex: undefined },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -46,7 +47,12 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="open" class="modal-backdrop" @mousedown.self="requestClose">
+      <div
+        v-if="open"
+        class="modal-backdrop"
+        :style="zIndex ? { zIndex } : undefined"
+        @mousedown.self="requestClose"
+      >
         <section
           class="modal-panel"
           role="dialog"

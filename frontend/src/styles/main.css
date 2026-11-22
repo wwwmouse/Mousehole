@@ -1,38 +1,38 @@
 :root {
   color-scheme: dark;
 
-  /* surfaces */
-  --bg: #0d0f13;
-  --bg-subtle: #111419;
-  --bg-raised: #161a21;
-  --bg-hover: #1c212a;
-  --bg-active: #222833;
-  --border: #252b36;
-  --border-strong: #333b49;
+  /* surfaces — warm ink, not a generic dark dashboard */
+  --bg: #171412;
+  --bg-subtle: #1d1916;
+  --bg-raised: #24201b;
+  --bg-hover: #2c2620;
+  --bg-active: #342c24;
+  --border: #352f27;
+  --border-strong: #4a4034;
 
-  /* text */
-  --text: #e7eaf0;
-  --text-secondary: #aab2c0;
-  --text-muted: #79828f;
-  --text-faint: #5b6472;
+  /* text — warm off-white, readable at small sizes */
+  --text: #ece5d8;
+  --text-secondary: #b9ae9d;
+  --text-muted: #948877;
+  --text-faint: #8f8372;
 
-  /* accents */
-  --accent: #6b8fff;
-  --accent-hover: #7d9cff;
-  --accent-soft: rgba(107, 143, 255, 0.12);
-  --accent-border: rgba(107, 143, 255, 0.4);
-  --success: #4ac26b;
-  --success-soft: rgba(74, 194, 107, 0.12);
-  --warning: #d9a441;
-  --warning-soft: rgba(217, 164, 65, 0.12);
-  --danger: #f2695c;
-  --danger-soft: rgba(242, 105, 92, 0.12);
+  /* accent — one copper accent, not default blue */
+  --accent: #c97a4a;
+  --accent-hover: #d98a5a;
+  --accent-soft: rgba(201, 122, 74, 0.14);
+  --accent-border: rgba(201, 122, 74, 0.46);
+  --success: #7f9b6a;
+  --success-soft: rgba(127, 155, 106, 0.14);
+  --warning: #d3a24c;
+  --warning-soft: rgba(211, 162, 76, 0.14);
+  --danger: #c96555;
+  --danger-soft: rgba(201, 101, 85, 0.14);
 
-  /* shape + depth */
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  /* shape + depth — editorial: fewer radii, rules instead of shadows */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 
   /* layout */
   --sidebar-width: 236px;
@@ -41,6 +41,8 @@
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Songti SC',
+    'Noto Serif CJK SC', 'Source Han Serif SC', Georgia, serif;
   --font-mono: 'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', Consolas,
     'Courier New', monospace;
 
@@ -64,10 +66,17 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-y: scroll;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
 }
 
 #app {
@@ -92,7 +101,7 @@ a {
 }
 
 ::selection {
-  background: rgba(107, 143, 255, 0.32);
+  background: rgba(201, 122, 74, 0.34);
 }
 
 :focus-visible {
@@ -130,6 +139,7 @@ input[type='search']::-webkit-search-cancel-button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-raised);
+  box-shadow: none;
 }
 
 /* -------------------------------- buttons -------------------------------- */
@@ -139,13 +149,13 @@ input[type='search']::-webkit-search-cancel-button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 16px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -197,7 +207,7 @@ input[type='search']::-webkit-search-cancel-button {
 }
 
 .btn--sm {
-  height: 28px;
+  height: 30px;
   padding: 0 10px;
   font-size: 12px;
   gap: 5px;
@@ -218,7 +228,7 @@ input[type='search']::-webkit-search-cancel-button {
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   transition:
     border-color 0.15s ease,
     background 0.15s ease;
@@ -226,8 +236,8 @@ input[type='search']::-webkit-search-cancel-button {
 
 .input,
 .select {
-  height: 34px;
-  padding: 0 11px;
+  height: 40px;
+  padding: 0 12px;
 }
 
 .textarea {
@@ -282,9 +292,9 @@ input[type='search']::-webkit-search-cancel-button {
   height: 20px;
   padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;

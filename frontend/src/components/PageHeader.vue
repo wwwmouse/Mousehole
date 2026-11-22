@@ -39,7 +39,9 @@ withDefaults(
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .page-header__main {
@@ -49,10 +51,13 @@ withDefaults(
 .page-header__back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 10px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   transition: color 0.15s ease;
 }
 
@@ -69,10 +74,11 @@ withDefaults(
 
 .page-header__title {
   margin: 0;
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: 30px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
@@ -85,10 +91,10 @@ withDefaults(
 
 .page-header__desc {
   margin: 8px 0 0;
-  max-width: 720px;
+  max-width: 680px;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

@@ -233,31 +233,33 @@ onMounted(() => {
 
 .toolbar__count {
   margin-left: auto;
-  font-size: 12px;
-  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 26px 32px;
 }
 
 .project-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    transform 0.15s ease;
+  gap: 8px;
+  padding: 16px 2px 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  transition: border-color 0.15s ease;
 }
 
 .project-card:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-raised);
-  transform: translateY(-1px);
+  border-top-color: var(--accent);
+  background: transparent;
 }
 
 .project-card__head {
@@ -269,20 +271,22 @@ onMounted(() => {
 .project-card__icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
 }
 
 .project-card__name {
   flex: 1;
   margin: 0;
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 20px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -290,10 +294,10 @@ onMounted(() => {
 
 .project-card__desc {
   margin: 0;
-  min-height: 40px;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--text-muted);
+  min-height: 44px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -307,8 +311,9 @@ onMounted(() => {
   gap: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
 }
 
 .project-card__updated {

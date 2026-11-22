@@ -432,6 +432,8 @@ onMounted(() => {
 .settings-card {
   padding: 0;
   overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: transparent;
 }
 
 .settings-card__head {
@@ -445,8 +447,10 @@ onMounted(() => {
 
 .settings-card__title {
   margin: 0;
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 21px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 

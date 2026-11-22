@@ -56,6 +56,7 @@ watch(
     :open="isOpen"
     :title="detail?.filename ?? '文件预览'"
     width="880px"
+    :z-index="200"
     @close="emit('close')"
   >
     <div v-if="loading" class="preview-loading">

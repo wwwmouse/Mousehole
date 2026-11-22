@@ -656,18 +656,22 @@ onBeforeUnmount(() => {
 .chat-empty {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 56px 24px;
+  margin: 24px 18px;
+  padding: 24px 0 24px 20px;
+  border-left: 2px solid var(--accent);
   color: var(--text-muted);
-  text-align: center;
+  text-align: left;
 }
 
 .chat-empty__title {
   margin: 0;
   color: var(--text);
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .chat-empty__desc {
@@ -680,25 +684,29 @@ onBeforeUnmount(() => {
 .chat-messages {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
+  padding: 4px 18px;
 }
 
 .chat-message {
-  max-width: 92%;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
+  width: 100%;
+  max-width: 100%;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .chat-message--user {
-  align-self: flex-end;
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  align-self: stretch;
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);
+  background: transparent;
 }
 
 .chat-message--assistant {
-  align-self: flex-start;
+  align-self: stretch;
 }
 
 .chat-message__head {
@@ -709,20 +717,22 @@ onBeforeUnmount(() => {
 }
 
 .chat-message__role {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .chat-message__usage {
   margin-left: auto;
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 10.5px;
-  color: var(--text-muted);
+  padding: 0;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
 }
 
 .chat-message__body {
@@ -731,7 +741,7 @@ onBeforeUnmount(() => {
 
 .chat-message__text {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 14.5px;
   line-height: 1.75;
   color: var(--text);
   white-space: pre-wrap;

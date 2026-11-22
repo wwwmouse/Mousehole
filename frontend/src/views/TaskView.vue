@@ -545,11 +545,6 @@ onMounted(() => {
 
       <!-- Settings -->
       <section v-if="activeTab === 'settings'" role="tabpanel" class="tab-panel">
-        <div class="notice">
-          <AppIcon name="info" :size="15" />
-          <span>可用文件不等于本次 Execution 实际读取的文件。这里展示的是 Task 的可用上下文，具体执行实际使用了哪些文件以 Execution 详情为准（Phase 2）。</span>
-        </div>
-
         <section class="card project-binding">
           <header class="project-binding__head">
             <h2 class="context-title">所属 Project</h2>
@@ -666,22 +661,19 @@ onMounted(() => {
                 :class="{ 'file-item--muted': row.source === 'excluded' }"
               >
                 <span class="file-item__icon"><AppIcon name="file" :size="15" /></span>
-                <div class="file-item__main">
+                <button
+                  type="button"
+                  class="file-item__main file-item__main--button"
+                  @click="previewFile = row.file"
+                >
                   <span class="file-item__name" :title="row.file.filename">{{ row.file.filename }}</span>
                   <span class="file-item__meta">
                     {{ fileTypeLabel(row.file.file_type) }} · {{ formatBytes(row.file.size) }}
                   </span>
-                </div>
+                </button>
                 <span class="file-item__source" :class="'file-item__source--' + row.source">
                   {{ sourceLabel(row.source) }}
                 </span>
-                <button
-                  type="button"
-                  class="btn btn--ghost btn--sm"
-                  @click="previewFile = row.file"
-                >
-                  预览
-                </button>
                 <button
                   type="button"
                   class="btn btn--ghost btn--sm"
@@ -749,8 +741,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
-  font-size: 12px;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .crumb {
@@ -783,18 +778,19 @@ onMounted(() => {
 
 .task-head__title {
   margin: 0;
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
 .task-head__desc {
   margin: 8px 0 0;
-  max-width: 760px;
-  font-size: 13px;
-  line-height: 1.6;
+  max-width: 720px;
+  font-size: 14px;
+  line-height: 1.65;
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -812,8 +808,10 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
-  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
 }
 
 .task-head__actions {
@@ -838,7 +836,7 @@ onMounted(() => {
 .tabbar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 28px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -846,12 +844,15 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
+  padding: 11px 0;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: color 0.14s ease;
 }
@@ -868,8 +869,8 @@ onMounted(() => {
 .tab-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-top: 6px;
+  gap: 18px;
+  padding-top: 10px;
 }
 
 .chat-panel {
@@ -928,8 +929,9 @@ onMounted(() => {
 
 .composer__box {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: inset 0 1px 0 var(--border-strong);
   overflow: hidden;
 }
 
@@ -993,15 +995,16 @@ onMounted(() => {
   gap: 2px;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  background: transparent;
 }
 
 .context-stat__value {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 26px;
   font-weight: 600;
   color: var(--text);
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .context-stat__label {
@@ -1025,8 +1028,10 @@ onMounted(() => {
 
 .context-title {
   margin: 0;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
@@ -1094,6 +1099,20 @@ onMounted(() => {
   gap: 2px;
   flex: 1;
   min-width: 0;
+}
+
+.file-item__main--button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-item__main--button:hover .file-item__name {
+  color: var(--accent);
 }
 
 .file-item__name {

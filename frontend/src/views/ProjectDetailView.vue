@@ -507,22 +507,19 @@ onMounted(() => {
             <tbody>
               <tr v-for="item in files" :key="item.file.id">
                 <td>
-                  <div class="cell-file">
+                  <button
+                    type="button"
+                    class="cell-file cell-file--button"
+                    @click="previewFile = item.file"
+                  >
                     <span class="cell-file__icon"><AppIcon name="file" :size="14" /></span>
                     <span class="cell-file__name" :title="item.file.filename">{{ item.file.filename }}</span>
-                  </div>
+                  </button>
                 </td>
                 <td><span class="chip">{{ fileTypeLabel(item.file.file_type) }}</span></td>
                 <td class="cell-muted">{{ formatBytes(item.file.size) }}</td>
                 <td class="cell-muted">{{ formatDateTime(item.added_at) }}</td>
                 <td class="table__actions">
-                  <button
-                    type="button"
-                    class="btn btn--ghost btn--sm"
-                    @click="previewFile = item.file"
-                  >
-                    预览
-                  </button>
                   <button
                     type="button"
                     class="btn btn--ghost btn--sm"
@@ -897,6 +894,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.cell-file--button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cell-file--button:hover .cell-file__name {
+  color: var(--accent);
 }
 
 .cell-file__icon {

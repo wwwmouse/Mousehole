@@ -13,12 +13,13 @@ import {
   deleteProject,
   deleteTask,
   getStatsOverview,
+  listFiles,
   listProjects,
   listTasks,
   updateProject,
   updateTask,
 } from '@/api/endpoints'
-import type { Project, StatsOverview, Task } from '@/api/types'
+import type { FileItem, Project, StatsOverview, Task } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 import { formatDate, formatRelative, greeting } from '@/utils/format'
@@ -32,6 +33,7 @@ const dateText = formatDate(now)
 
 const projects = ref<Project[]>([])
 const tasks = ref<Task[]>([])
+const files = ref<FileItem[]>([])
 const stats = ref<StatsOverview | null>(null)
 const loading = ref(true)
 const projectsError = ref<string | null>(null)
@@ -41,6 +43,13 @@ const creating = ref(false)
 
 const recentProjects = computed(() => projects.value.slice(0, 5))
 const recentTasks = computed(() => tasks.value.slice(0, 5))
+const activeProjects = computed(
+  () => projects.value.filter((project) => project.status !== 'archived').length,
+)
+const activeTasks = computed(
+  () => tasks.value.filter((task) => task.status !== 'archived').length,
+)
+const libraryCount = computed(() => files.value.length)
 
 const projectNames = computed(() => {
   const map = new Map<string, string>()
@@ -56,6 +65,7 @@ function formatNumber(value: number | undefined): string {
 
 const daily = computed(() => stats.value?.daily ?? [])
 const dailyLabels = computed(() => daily.value.map((item) => item.date.slice(5)))
+const activeStatKey = ref<'conversations' | 'tokens'>('conversations')
 
 const usageStats = computed(() => [
   {
@@ -80,6 +90,16 @@ const usageStats = computed(() => [
   },
 ])
 
+const activeStat = computed(
+  () =>
+    usageStats.value.find((item) => item.key === activeStatKey.value) ??
+    usageStats.value[0],
+)
+
+function setActiveStat(key: 'conversations' | 'tokens'): void {
+  activeStatKey.value = key
+}
+
 function openArtifact(item: { task_id: string }): void {
   void router.push({
     name: 'task',
@@ -95,11 +115,13 @@ async function load(): Promise<void> {
   projectsError.value = null
   tasksError.value = null
   statsError.value = null
-  const [projectResult, taskResult, statsResult] = await Promise.allSettled([
-    listProjects({ limit: 200 }),
-    listTasks({ limit: 5 }),
-    getStatsOverview(7),
-  ])
+  const [projectResult, taskResult, statsResult, filesResult] =
+    await Promise.allSettled([
+      listProjects({ limit: 200 }),
+      listTasks({ limit: 200 }),
+      getStatsOverview(7),
+      listFiles({ limit: 200 }),
+    ])
   if (projectResult.status === 'fulfilled') {
     projects.value = projectResult.value
   } else {
@@ -117,6 +139,11 @@ async function load(): Promise<void> {
   } else {
     statsError.value = errorMessage(statsResult.reason)
     stats.value = null
+  }
+  if (filesResult.status === 'fulfilled') {
+    files.value = filesResult.value
+  } else {
+    files.value = []
   }
   loading.value = false
 }
@@ -232,22 +259,69 @@ onMounted(() => {
       </button>
     </section>
 
-    <section class="stats" aria-label="使用统计">
-      <article v-for="stat in usageStats" :key="stat.key" class="card stat-card">
-        <div class="stat-card__head">
-          <span class="stat-card__icon"><AppIcon :name="stat.icon" :size="16" /></span>
-          <span class="stat-card__label">{{ stat.label }}</span>
-          <span v-if="statsError" class="chip chip--muted">不可用</span>
-        </div>
-        <p class="stat-card__value">{{ stat.value }}</p>
+    <section class="overview" aria-label="使用统计与活跃概况">
+      <div class="overview-panel overview-panel--chart">
+        <header class="overview-panel__head">
+          <div class="stat-switch" role="tablist" aria-label="统计指标">
+            <button
+              type="button"
+              class="stat-switch__item"
+              :class="{ 'stat-switch__item--active': activeStatKey === 'conversations' }"
+              role="tab"
+              :aria-selected="activeStatKey === 'conversations'"
+              @click="setActiveStat('conversations')"
+            >
+              对话轮数
+            </button>
+            <button
+              type="button"
+              class="stat-switch__item"
+              :class="{ 'stat-switch__item--active': activeStatKey === 'tokens' }"
+              role="tab"
+              :aria-selected="activeStatKey === 'tokens'"
+              @click="setActiveStat('tokens')"
+            >
+              Token
+            </button>
+          </div>
+          <div class="overview-panel__heading">
+            <span class="overview-panel__eyebrow">LAST 7 DAYS</span>
+            <h2 class="overview-panel__title">{{ activeStat.label }}</h2>
+          </div>
+          <span class="overview-panel__value">{{ activeStat.value }}</span>
+        </header>
         <StatsBarChart
           v-if="stats && !statsError"
-          :values="stat.series"
-          :labels="stat.labels"
-          :format="stat.format"
+          :values="activeStat.series"
+          :labels="activeStat.labels"
+          :format="activeStat.format"
         />
-        <p class="stat-card__note">{{ statsError ?? stat.note }}</p>
-      </article>
+        <p class="overview-panel__note">{{ statsError ?? activeStat.note }}</p>
+      </div>
+
+      <aside class="overview-panel overview-panel--activity">
+        <header class="overview-panel__head overview-panel__head--activity">
+          <div class="overview-panel__heading">
+            <span class="overview-panel__eyebrow">ACTIVE NOW</span>
+            <h2 class="overview-panel__title">最近活跃</h2>
+          </div>
+        </header>
+        <ul class="activity-list">
+          <li>
+            <span class="activity-list__label">Tasks</span>
+            <strong class="activity-list__value">{{ activeTasks }}</strong>
+          </li>
+          <li>
+            <span class="activity-list__label">Projects</span>
+            <strong class="activity-list__value">{{ activeProjects }}</strong>
+          </li>
+          <li>
+            <span class="activity-list__label">Library</span>
+            <strong class="activity-list__value">{{ libraryCount }}</strong>
+          </li>
+        </ul>
+        <p class="overview-panel__note">未归档任务 / 项目与资料库文件总数</p>
+      </aside>
     </section>
 
     <div v-if="bothFailed" class="panel panel--error">
@@ -262,7 +336,10 @@ onMounted(() => {
     <div class="home-grid">
       <section class="card section-card">
         <header class="section-head">
-          <h2 class="section-title">最近 Projects</h2>
+          <div class="section-heading">
+            <h2 class="section-title">最近 Projects</h2>
+            <span class="section-count">{{ activeProjects }}</span>
+          </div>
           <RouterLink to="/projects" class="section-link">
             查看全部
             <AppIcon name="chevron-right" :size="13" />
@@ -309,7 +386,10 @@ onMounted(() => {
 
       <section class="card section-card">
         <header class="section-head">
-          <h2 class="section-title">最近 Tasks</h2>
+          <div class="section-heading">
+            <h2 class="section-title">最近 Tasks</h2>
+            <span class="section-count">{{ activeTasks }}</span>
+          </div>
           <span class="section-caption">按创建时间排序</span>
         </header>
         <LoadingState v-if="loading" compact />
@@ -356,7 +436,10 @@ onMounted(() => {
 
     <section class="card section-card">
       <header class="section-head">
-        <h2 class="section-title">最近成果</h2>
+        <div class="section-heading">
+          <h2 class="section-title">最近成果</h2>
+          <span class="section-count">{{ recentArtifacts.length }}</span>
+        </div>
         <span class="section-caption">来自 Chat 与正式运行</span>
       </header>
       <LoadingState v-if="loading" compact />
@@ -400,7 +483,7 @@ onMounted(() => {
 .home {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 26px;
 }
 
 .hero {
@@ -408,27 +491,30 @@ onMounted(() => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  padding: 8px 4px 12px;
+  padding: 2px 2px 4px;
 }
 
 .hero__date {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
   color: var(--text-muted);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.12em;
 }
 
 .hero__greeting {
   margin: 0;
-  font-size: 28px;
+  font-family: var(--font-display);
+  font-size: 40px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
 }
 
 .hero__sub {
-  margin: 8px 0 0;
-  font-size: 13px;
+  margin: 10px 0 0;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -437,87 +523,202 @@ onMounted(() => {
   color: var(--text);
 }
 
-.stats {
+.overview {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.75fr);
+  gap: 32px;
+  padding: 18px 0 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  align-items: stretch;
 }
 
-.stat-card {
-  padding: 14px 16px;
+.overview-panel {
+  min-width: 0;
 }
 
-.stat-card__head {
+.overview-panel--chart {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  padding-right: 32px;
+  border-right: 1px solid var(--border);
 }
 
-.stat-card__icon {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
+.overview-panel__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.overview-panel__head--activity {
+  margin-bottom: 0;
+}
+
+.stat-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+}
+
+.stat-switch__item {
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.stat-switch__item:hover {
+  color: var(--text);
+}
+
+.stat-switch__item--active {
+  background: var(--accent);
+  color: #1b120d;
+}
+
+.overview-panel__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.overview-panel__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.stat-card__label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.stat-card__head .chip {
-  margin-left: auto;
-}
-
-.stat-card__value {
-  margin: 10px 0 2px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.stat-card__note {
+.overview-panel__title {
   margin: 0;
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.overview-panel__value {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.overview-panel__note {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
   line-height: 1.5;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.activity-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-list li:last-child {
+  border-bottom: 0;
+}
+
+.activity-list__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.activity-list__value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text);
 }
 
 .home-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 32px;
 }
 
 .section-card {
-  padding: 16px 4px 8px;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
 .section-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 16px 10px;
+  padding: 0 2px 10px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.section-count {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .section-title {
   margin: 0;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
 .section-link {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 12px;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -526,7 +727,10 @@ onMounted(() => {
 }
 
 .section-caption {
-  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-faint);
 }
 
@@ -547,7 +751,7 @@ onMounted(() => {
 .recent-list {
   list-style: none;
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 0;
 }
 
 .recent-list__item {
@@ -559,17 +763,19 @@ onMounted(() => {
 .recent-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   flex: 1;
   min-width: 0;
-  padding: 10px;
-  border-radius: var(--radius-sm);
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   text-align: left;
-  transition: background 0.13s ease;
+  transition: border-color 0.13s ease, background 0.13s ease;
 }
 
 .recent-row:hover {
-  background: var(--bg-hover);
+  background: var(--bg-subtle);
+  border-bottom-color: var(--border-strong);
 }
 
 .recent-row--button {
@@ -583,13 +789,13 @@ onMounted(() => {
 .recent-row__icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
 }
 
 .recent-row__main {
@@ -601,7 +807,7 @@ onMounted(() => {
 }
 
 .recent-row__title {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -610,7 +816,7 @@ onMounted(() => {
 
 .recent-row__meta {
   font-size: 11.5px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -618,8 +824,19 @@ onMounted(() => {
 
 @media (max-width: 980px) {
   .home-grid,
-  .stats {
+  .overview {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview {
+    gap: 18px;
+  }
+
+  .overview-panel--chart {
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .hero {

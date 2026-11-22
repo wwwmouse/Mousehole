@@ -10,12 +10,14 @@ withDefaults(
     cancelLabel?: string
     danger?: boolean
     busy?: boolean
+    zIndex?: number
   }>(),
   {
     confirmLabel: '确认',
     cancelLabel: '取消',
     danger: false,
     busy: false,
+    zIndex: 180,
   },
 )
 
@@ -23,7 +25,14 @@ const emit = defineEmits<{ confirm: []; close: [] }>()
 </script>
 
 <template>
-  <Modal :open="open" :title="title" :dismissible="!busy" width="460px" @close="emit('close')">
+  <Modal
+    :open="open"
+    :title="title"
+    :dismissible="!busy"
+    width="460px"
+    :z-index="zIndex"
+    @close="emit('close')"
+  >
     <p class="confirm-message">{{ message }}</p>
     <slot />
     <template #footer>

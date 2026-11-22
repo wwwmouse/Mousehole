@@ -324,7 +324,6 @@ onBeforeUnmount(() => {
             <td class="cell-muted">{{ formatBytes(file.size) }}</td>
             <td class="cell-muted">{{ formatDateTime(file.created_at) }}</td>
             <td class="table__actions">
-              <button type="button" class="btn btn--ghost btn--sm" @click="openPreview(file)">预览</button>
               <button type="button" class="btn btn--ghost btn--sm" @click="deleteTarget = file">删除</button>
             </td>
           </tr>
@@ -455,11 +454,11 @@ onBeforeUnmount(() => {
 
 .search-box__input {
   flex: 1;
-  height: 34px;
+  height: 40px;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   outline: none;
 }
 
@@ -470,14 +469,16 @@ onBeforeUnmount(() => {
 
 .toolbar__count {
   margin-left: auto;
-  font-size: 12px;
-  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .upload-note {
   margin: 0 0 16px;
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-muted);
   line-height: 1.6;
 }
 
@@ -487,31 +488,35 @@ onBeforeUnmount(() => {
 }
 
 .table-wrap {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .table th {
-  padding: 10px 14px;
+  padding: 12px 10px;
   text-align: left;
+  font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 11.5px;
-  color: var(--text-faint);
-  background: var(--bg-subtle);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: transparent;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 9px 14px;
+  padding: 12px 10px;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   vertical-align: middle;
@@ -522,7 +527,7 @@ onBeforeUnmount(() => {
 }
 
 .table tbody tr:hover {
-  background: var(--bg-hover);
+  background: var(--bg-subtle);
 }
 
 .table__actions {

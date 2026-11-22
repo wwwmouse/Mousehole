@@ -2,12 +2,16 @@ import { expect, test } from '@playwright/test'
 
 import { installMockApi } from './mockApi'
 
-test('home renders 7-day conversation and token bar charts', async ({ page }) => {
+test('home renders combined overview with switchable charts', async ({ page }) => {
   await installMockApi(page)
   await page.goto('/')
-  await expect(page.locator('.stat-card')).toHaveCount(2)
-  await expect(page.locator('.bar-chart')).toHaveCount(2)
-  await expect(page.locator('.bar-chart__bar')).toHaveCount(14)
+  await expect(page.locator('.overview-panel--chart')).toBeVisible()
+  await expect(page.locator('.bar-chart')).toHaveCount(1)
+  await expect(page.locator('.bar-chart__bar')).toHaveCount(7)
+  await expect(page.locator('.overview-panel--activity')).toBeVisible()
+  await expect(page.locator('.activity-list__value')).toHaveCount(3)
+  await page.getByRole('tab', { name: 'Token' }).click()
+  await expect(page.locator('.bar-chart__bar')).toHaveCount(7)
   // Internal usage-completeness details must not be exposed to users.
   await expect(page.getByText('数据不完整')).toHaveCount(0)
   await page.screenshot({ path: 'test-results/home-stats.png', fullPage: true })
@@ -48,7 +52,7 @@ test('core closed loop: upload file -> create project -> task -> chat -> artifac
 
   // File content is readable directly from Task Settings.
   await page.getByRole('tab').filter({ hasText: 'Settings' }).click()
-  await page.getByRole('button', { name: '预览' }).first().click()
+  await page.locator('.file-item__main--button').first().click()
   const previewDialog = page.getByRole('dialog')
   await expect(previewDialog).toContainText('E2E Notes')
   await page.keyboard.press('Escape')
