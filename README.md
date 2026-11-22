@@ -135,13 +135,3 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 - [开发计划与验收记录](docs/DEVELOPMENT_PLAN.md)
 - [Agent 开发约束](AGENTS.md)
 
-## 边界
-
-- 个人本地工具，不做多用户/权限/SaaS；
-- MVP 不做 RAG/向量检索、多 Agent、任意 Shell、Office 解析；
-- 极多长文件合计超过 Chat 文件预算时仍会截断，可用 `read_task_file` 分页读取；
-- 真实模型 E2E 默认跳过，发布前可按需手动执行；MVP 后续演进（可观测性/评估/RAG）不在本次 tag 范围。
-
-## 许可证
-
-未确定。在项目负责人选定许可证前，请勿对外分发或复用本项目代码。
