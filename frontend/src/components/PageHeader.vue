@@ -75,7 +75,7 @@ withDefaults(
 .page-header__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: var(--font-size-page-title);
   font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1.15;

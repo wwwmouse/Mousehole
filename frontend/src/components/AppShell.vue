@@ -13,6 +13,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Home', to: '/', icon: 'home' },
+  { label: 'Tasks', to: '/tasks', icon: 'flag' },
   { label: 'Projects', to: '/projects', icon: 'folder' },
   { label: 'Library', to: '/library', icon: 'library' },
   { label: 'Skills', to: '/skills', icon: 'sparkles' },
@@ -117,7 +118,10 @@ onMounted(() => {
         </div>
       </header>
 
-      <main class="app-content">
+      <main
+        class="app-content"
+        :class="{ 'app-content--task': route.name === 'task' }"
+      >
         <slot />
       </main>
     </div>
@@ -419,6 +423,11 @@ onMounted(() => {
   max-width: 1160px;
   padding: 36px 40px 72px;
   margin: 0 auto;
+}
+
+.app-content--task {
+  max-width: none;
+  padding: 24px 20px 64px 12px;
 }
 
 .app-shell--collapsed .topbar-toggle {

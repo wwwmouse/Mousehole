@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import DbSession
+from app.modules.conversation import service as conversation_service
 from app.modules.task import service
 from app.modules.task.schemas import TaskCreate, TaskRead, TaskUpdate
 
@@ -25,7 +26,7 @@ def list_tasks(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> list[TaskRead]:
-    return service.list_tasks(
+    tasks = service.list_tasks(
         db,
         workspace_id=workspace_id,
         project_id=project_id,
@@ -33,6 +34,10 @@ def list_tasks(
         limit=limit,
         offset=offset,
     )
+    latest = conversation_service.last_message_times(db, [task.id for task in tasks])
+    for task in tasks:
+        task.last_message_at = latest.get(task.id)
+    return tasks
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

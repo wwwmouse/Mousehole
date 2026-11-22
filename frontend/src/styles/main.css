@@ -46,6 +46,13 @@
   --font-mono: 'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', Consolas,
     'Courier New', monospace;
 
+  /* shared type scale */
+  --font-size-meta: 12px;
+  --font-size-body: 14px;
+  --font-size-tab: 13px;
+  --font-size-section: 19px;
+  --font-size-page-title: 36px;
+
   font-family: var(--font-sans);
   font-size: 14px;
 }

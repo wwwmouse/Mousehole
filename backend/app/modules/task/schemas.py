@@ -43,5 +43,6 @@ class TaskRead(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     usage: dict | None = None
+    last_message_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

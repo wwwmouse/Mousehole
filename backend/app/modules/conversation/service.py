@@ -4,6 +4,8 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from sqlalchemy import func, select
+
 from app.modules.conversation import repository
 from app.modules.conversation.models import Conversation, Message
 from app.modules.conversation.schemas import (
@@ -13,6 +15,24 @@ from app.modules.conversation.schemas import (
 from app.modules.task import service as task_service
 from app.modules.task.models import Task
 from app.shared.usage import add_usage
+
+
+def last_message_times(
+    session: Session, task_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, object]:
+    """Latest user/assistant message time per Task (for task indexes)."""
+    if not task_ids:
+        return {}
+    rows = session.execute(
+        select(Conversation.task_id, func.max(Message.created_at))
+        .join(Message, Message.conversation_id == Conversation.id)
+        .where(
+            Conversation.task_id.in_(task_ids),
+            Message.role.in_(("user", "assistant")),
+        )
+        .group_by(Conversation.task_id)
+    ).all()
+    return {task_id: stamp for task_id, stamp in rows}
 
 
 def get_or_create_conversation(session: Session, task: Task) -> Conversation:

@@ -624,7 +624,7 @@ onMounted(() => {
 .tabbar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 28px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
@@ -634,12 +634,15 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 12px;
+  padding: 11px 0;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  font-size: 15px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-tab);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: color 0.14s ease;
 }
@@ -723,7 +726,7 @@ onMounted(() => {
 .context-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: var(--font-size-section);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);

@@ -49,6 +49,7 @@ export interface Task {
   temperature: number | null
   max_tokens: number | null
   usage: TaskUsage | null
+  last_message_at: string | null
   created_at: string
   updated_at: string
 }

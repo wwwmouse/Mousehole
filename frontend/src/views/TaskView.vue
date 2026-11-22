@@ -18,6 +18,7 @@ import {
   getTaskFiles,
   listModels,
   listProjects,
+  listTasks,
   removeTaskFileOverride,
   updateTask,
   updateTaskFile,
@@ -38,6 +39,7 @@ import {
   fileTypeLabel,
   formatBytes,
   formatDateTime,
+  formatRelative,
   taskStatusLabel,
 } from '@/utils/format'
 
@@ -67,6 +69,8 @@ const fileActionBusy = ref<string | null>(null)
 const addingFiles = ref(false)
 
 const models = ref<ModelInfo[]>([])
+const navTasks = ref<Task[]>([])
+const navProjects = ref<Project[]>([])
 const modelSaving = ref(false)
 const selectedModel = ref('')
 
@@ -79,6 +83,28 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
   { value: 'completed', label: '已完成' },
   { value: 'archived', label: '已归档' },
 ]
+
+const navGlobalTasks = computed(() =>
+  navTasks.value.filter((item) => !item.project_id),
+)
+
+const navProjectGroups = computed(() => {
+  const groups = new Map<string, Task[]>()
+  for (const item of navTasks.value) {
+    if (!item.project_id) continue
+    const list = groups.get(item.project_id) ?? []
+    list.push(item)
+    groups.set(item.project_id, list)
+  }
+  const names = new Map(navProjects.value.map((item) => [item.id, item.name]))
+  return Array.from(groups.entries())
+    .map(([projectId, items]) => ({
+      projectId,
+      projectName: names.get(projectId) ?? '关联 Project',
+      tasks: items,
+    }))
+    .sort((a, b) => a.projectName.localeCompare(b.projectName, 'zh-CN'))
+})
 
 const tabs = computed(() => [
   { key: 'chat' as TabKey, label: 'Chat' },
@@ -282,6 +308,20 @@ const allProjects = ref<Project[]>([])
 const bindingProjectId = ref('')
 const binding = ref(false)
 
+async function loadNavigation(): Promise<void> {
+  try {
+    const [taskList, projectList] = await Promise.all([
+      listTasks({ limit: 200 }),
+      listProjects({ limit: 200 }),
+    ])
+    navTasks.value = taskList
+    navProjects.value = projectList
+  } catch {
+    navTasks.value = []
+    navProjects.value = []
+  }
+}
+
 async function loadProjects(): Promise<void> {
   try {
     const list = await listProjects({ limit: 200 })
@@ -432,12 +472,14 @@ async function openSourceMessage(messageId: string): Promise<void> {
 watch(taskId, () => {
   activeTab.value = 'chat'
   void load()
+  void loadNavigation()
 })
 
 onMounted(() => {
   if (route.query.tab === 'artifacts') activeTab.value = 'artifacts'
   void load()
   void loadProjects()
+  void loadNavigation()
   void loadModels()
 })
 </script>
@@ -462,6 +504,64 @@ onMounted(() => {
     </div>
 
     <template v-else-if="task">
+      <div class="task-layout">
+        <aside class="task-nav" aria-label="Task 快速切换">
+          <div class="task-nav__top">
+            <span class="task-nav__eyebrow">WORKSPACE</span>
+            <RouterLink to="/tasks" class="task-nav__all">All Tasks</RouterLink>
+          </div>
+
+          <details
+            v-for="group in navProjectGroups"
+            :key="group.projectId"
+            class="task-nav__group"
+            :open="group.projectId === task.project_id"
+          >
+            <summary class="task-nav__project">
+              <span class="task-nav__project-name">{{ group.projectName }}</span>
+              <span class="task-nav__count">{{ group.tasks.length }}</span>
+            </summary>
+            <RouterLink
+              v-for="item in group.tasks"
+              :key="item.id"
+              :to="'/tasks/' + item.id"
+              class="task-nav__item"
+              :class="{ 'task-nav__item--active': item.id === task.id }"
+            >
+              <span class="task-nav__flag" :class="'task-nav__flag--' + item.status"><AppIcon name="flag" :size="12" /></span>
+              <span class="task-nav__title">{{ item.title }}</span>
+              <span class="task-nav__time">
+                {{ item.last_message_at ? formatRelative(item.last_message_at) : '—' }}
+              </span>
+            </RouterLink>
+          </details>
+
+          <details
+            v-if="navGlobalTasks.length"
+            class="task-nav__group"
+            :open="!task.project_id"
+          >
+            <summary class="task-nav__project">
+              <span class="task-nav__project-name">Global Workspace</span>
+              <span class="task-nav__count">{{ navGlobalTasks.length }}</span>
+            </summary>
+            <RouterLink
+              v-for="item in navGlobalTasks"
+              :key="item.id"
+              :to="'/tasks/' + item.id"
+              class="task-nav__item"
+              :class="{ 'task-nav__item--active': item.id === task.id }"
+            >
+              <span class="task-nav__flag" :class="'task-nav__flag--' + item.status"><AppIcon name="flag" :size="12" /></span>
+              <span class="task-nav__title">{{ item.title }}</span>
+              <span class="task-nav__time">
+                {{ item.last_message_at ? formatRelative(item.last_message_at) : '—' }}
+              </span>
+            </RouterLink>
+          </details>
+        </aside>
+
+        <div class="task-main">
       <header class="task-head">
         <div class="task-head__main">
           <nav class="crumbs" aria-label="面包屑">
@@ -722,6 +822,8 @@ onMounted(() => {
         @close="pickerOpen = false"
         @selected="addExtraFiles"
       />
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -730,7 +832,173 @@ onMounted(() => {
 .task-view {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
+}
+
+.task-layout {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.task-main {
+  min-width: 0;
+  width: 100%;
+  max-width: 940px;
+}
+
+.task-nav {
+  position: sticky;
+  top: calc(var(--topbar-height) + 20px);
+  max-height: calc(100vh - var(--topbar-height) - 44px);
+  overflow-y: auto;
+  padding: 0 12px 18px 0;
+  border-right: 1px solid var(--border);
+}
+
+.task-nav__top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-nav__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.task-nav__all {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.task-nav__all:hover {
+  color: var(--accent);
+}
+
+.task-nav__group {
+  margin-top: 16px;
+}
+
+.task-nav__heading {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.task-nav__project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 2px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.task-nav__project::-webkit-details-marker {
+  display: none;
+}
+
+.task-nav__project:hover {
+  color: var(--text);
+}
+
+.task-nav__project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-nav__count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.task-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  margin-left: 8px;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.task-nav__flag {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.task-nav__flag--active {
+  color: var(--accent);
+}
+
+.task-nav__flag--completed {
+  color: var(--success);
+}
+
+.task-nav__flag--archived {
+  color: var(--text-faint);
+}
+
+.task-nav__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-nav__time {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.task-nav__item:hover {
+  color: var(--text);
+  border-left-color: var(--border-strong);
+}
+
+.task-nav__item--active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 1000px) {
+  .task-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task-nav {
+    display: none;
+  }
+
+  .task-main {
+    max-width: none;
+  }
 }
 
 .state-page {
@@ -1041,7 +1309,7 @@ onMounted(() => {
 .context-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: var(--font-size-section);
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--text);

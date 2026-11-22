@@ -71,19 +71,19 @@ const text = computed(() => {
 
 .status-badge[data-tone='success'] {
   color: var(--success);
-  border-color: rgba(74, 194, 107, 0.35);
+  border-color: color-mix(in srgb, var(--success) 42%, transparent);
   background: var(--success-soft);
 }
 
 .status-badge[data-tone='warning'] {
   color: var(--warning);
-  border-color: rgba(217, 164, 65, 0.35);
+  border-color: color-mix(in srgb, var(--warning) 42%, transparent);
   background: var(--warning-soft);
 }
 
 .status-badge[data-tone='danger'] {
   color: var(--danger);
-  border-color: rgba(242, 105, 92, 0.35);
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent);
   background: var(--danger-soft);
 }
 

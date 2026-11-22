@@ -398,7 +398,10 @@ onMounted(() => {
             <h2 class="section-title">最近 Tasks</h2>
             <span class="section-count">{{ activeTasks }}</span>
           </div>
-          <span class="section-caption">按创建时间排序</span>
+          <RouterLink to="/tasks" class="section-link">
+            查看全部
+            <AppIcon name="chevron-right" :size="13" />
+          </RouterLink>
         </header>
         <LoadingState v-if="loading" compact />
         <div v-else-if="tasksError" class="section-error">
@@ -736,7 +739,7 @@ onMounted(() => {
 .section-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: var(--font-size-section);
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--text);

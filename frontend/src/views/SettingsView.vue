@@ -448,7 +448,7 @@ onMounted(() => {
 .settings-card__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 21px;
+  font-size: var(--font-size-section);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);

@@ -17,6 +17,19 @@ test('home renders combined overview with switchable charts', async ({ page }) =
   await page.screenshot({ path: 'test-results/home-stats.png', fullPage: true })
 })
 
+test('global tasks page is reachable from navigation', async ({ page }) => {
+  await installMockApi(page)
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Tasks' }).click()
+  await expect(page).toHaveURL(/\/tasks$/)
+  await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '新建 Task' }).first()).toBeVisible()
+  await page.getByRole('button', { name: '筛选' }).click()
+  await expect(page.getByText('Project 内 Task')).toBeVisible()
+  await expect(page.getByText('全局 Task')).toBeVisible()
+  await page.getByRole('button', { name: '清空筛选' }).click()
+})
+
 test('core closed loop: upload file -> create project -> task -> chat -> artifact', async ({
   page,
 }) => {
