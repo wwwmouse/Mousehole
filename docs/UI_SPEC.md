@@ -42,13 +42,15 @@ mousehole 的界面应体现现代 AI 工作台的产品定位，同时吸收专
 建议导航结构：
 
 - Home：全局工作台。
-- Projects：项目列表。
+- All Tasks：跨 Project 的 Task 全局索引，按 Global Workspace / Project 分组；支持筛选、Project 置顶和三点菜单。
+- Projects：项目列表；Project 是可选组织层，不改变 Task 的归属。
 - Library：Global Library。
+- Skills：全局 Skill Library。
 - Settings：应用级设置。
 
 Artifacts 不设独立的全局导航入口：成果按所属 Task 组织，从 Task 的 Artifacts Tab、Project 页面或首页「最近成果」进入。
 
-Task 不作为独立的全局一级导航入口，其主要入口来自首页最近任务、Project 页面和相关工作记录。
+All Tasks 只是任务视图，不是新的顶层实体；Task 仍属于 Workspace，可选绑定 Project。Task 详情仍可从 All Tasks、首页最近任务、Project 页面进入。
 
 全局导航中的 Home 对应 Global Workspace，不要求用户进入应用后先选择 Workspace 或 Project。
 
@@ -593,11 +595,13 @@ MVP 暂不要求：
 
 ---
 
-## 14. Phase 3 实装补充（当前界面）
+## 14. Phase 3/4 实装补充（当前界面）
 
 ### 14.1 全局导航
 
-- 左侧导航新增 **Skills**（与 Home / Projects / Library / Settings 并列），进入全局 Skill Library；
+- 左侧导航包含 **Home / All Tasks / Projects / Library / Skills / Settings**；
+- All Tasks 是跨 Project 的任务索引，按 Global Workspace / Project 分组，Project 支持置顶与三点菜单（置顶 / 查看详情 / 删除）；
+- Task 页面左侧提供 Project → Task 快速切换树，显示最近对话时间；
 - Skill Library 支持新增、编辑、删除，编辑弹窗内可上传文件/文件夹作为 Skill 资料。
 
 ### 14.2 Task Chat

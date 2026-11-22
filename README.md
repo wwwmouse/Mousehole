@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**状态：Phase 4 已完成（MVP 功能验收通过）。** 当前进入维护/打磨阶段。
+**状态：Phase 1–4 已完成，MVP 功能验收通过。** 当前处于 MVP 冻结与发布收尾阶段，准备打 tag。
 
 ## 核心闭环
 
@@ -14,6 +14,16 @@
 - Workspace → Project → Task → Execution → Artifact；
 - File 提供资料，Conversation 记录交流；
 - 纯本地优先，数据默认保存在本机。
+
+## 界面预览
+
+| Home | All Tasks |
+| --- | --- |
+| ![Home](docs/assets/home.png) | ![All Tasks](docs/assets/all-tasks.png) |
+
+| Projects | Task |
+| --- | --- |
+| ![Projects](docs/assets/projects.png) | ![Task](docs/assets/task.png) |
 
 ## 快速开始（Docker，推荐）
 
@@ -101,7 +111,7 @@ cd ..\frontend
 npm run build
 
 # Playwright E2E（需 Docker 8090 运行；Mock API，不调用真实模型）
-npm run test:e2e                                      # 当前 2 passed
+npm run test:e2e                                      # 当前 3 passed（1 skipped: real-model）
 ```
 
 E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx playwright install chromium` 并调整 `playwright.config.ts`。
@@ -109,6 +119,7 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 ## 主要能力
 
 - Project / Task / File 管理，PDF、Markdown、TXT 解析，文件继承与引用保护；
+- All Tasks 全局索引：按 Global Workspace / Project 分组，支持置顶、筛选、三点菜单；
 - Task Chat：SSE 流式输出、临时文件单轮引用、Skill 引用、受控工具调用；
 - Execution：确定性 Pipeline、状态/阶段进度、取消、文件快照、失败显式；
 - Artifact：独立版本化成果，支持下载与删除；
@@ -129,7 +140,7 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 - 个人本地工具，不做多用户/权限/SaaS；
 - MVP 不做 RAG/向量检索、多 Agent、任意 Shell、Office 解析；
 - 极多长文件合计超过 Chat 文件预算时仍会截断，可用 `read_task_file` 分页读取；
-- UI 视觉细节仍可继续打磨。
+- 真实模型 E2E 默认跳过，发布前可按需手动执行；MVP 后续演进（可观测性/评估/RAG）不在本次 tag 范围。
 
 ## 许可证
 

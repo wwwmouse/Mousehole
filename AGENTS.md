@@ -9,8 +9,8 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：Phase 1–3 已完成；Phase 4 已完成并通过 MVP 功能验收（统计/Overview/筛选/运行历史、Docker 生产/开发栈、备份恢复、Playwright E2E、文件预览、SSE 流式与临时文件单轮化）。剩余仅为 UI 视觉细节打磨。
-下一个交付点 = 用户决定下一阶段范围。
+当前状态：Phase 1–4 已完成并通过 MVP 功能验收（统计/Overview/筛选/运行历史、Docker 生产/开发栈、备份恢复、Playwright E2E、文件预览、SSE 流式与临时文件单轮化；2026-11-22 完成 All Tasks / Task 左树 / Projects Ledger / 状态色与字体统一等 UI 收尾）。
+当前处于 MVP 冻结与发布收尾阶段，准备打 tag；下一个交付点 = 用户决定 Phase 5 范围。
 
 ## 2. 开工前必读（按顺序）
 
@@ -61,7 +61,7 @@ MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 
 ## 7. 验证方式
 
 - 前端：`npm run dev` 能打开核心页面。
-- 后端：`pytest` 通过；`uvicorn` 可启动；`/api/health` 正常。
+- 后端：`pytest` 通过；`uvicorn` 可启动；`/api/v1/health` 正常。
 - 数据：`alembic upgrade head` 成功；重启后数据仍在。
 - 部署：`docker compose up` 可启动（Docker 命令需非沙箱执行）。
 

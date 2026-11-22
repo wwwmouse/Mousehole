@@ -219,7 +219,8 @@ MVP 开发压缩为四个 Phase。
 - 已验证：Playwright E2E 核心闭环通过（Mock API，上传 → Project → Task → 文件预览 → Chat → 成果下载/删除）。
 - 本轮追加：Task 临时文件改为**单轮附件**（不进 Library、不写入 Task 上下文）、Project/Task 文件预览、最终回答统一 SSE（工具 pre-pass 仅用于决定/执行工具，完成后重新流式生成）、README 启动说明重写。
 - 已验证：开发 compose 运行（5173 Vite / 8000 API / Vite client / API proxy 正常）；切回生产后数据行数不变；生产容器 restart 后服务与数据仍在。
-- **Phase 4 完成（2026-11-21）**：MVP 功能验收通过；剩余仅为 UI 视觉细节打磨，不阻塞 MVP。
+- **Phase 4 完成（2026-11-21）**：MVP 功能验收通过。
+- **UI 收尾（2026-11-22）**：All Tasks 全局索引（Global/Project 分组、置顶、三点菜单）、Task 左树快速切换与最近对话时间、Projects Ledger、Task 状态色、字体 token 与 Tab 样式统一；E2E 3 passed，MVP 范围冻结，准备打 tag。
 
 #### Phase 4：完整 UI、系统集成与 MVP 验收
 
@@ -382,7 +383,7 @@ MVP 开发压缩为四个 Phase。
 **真实模型测试：**
 - 单独进行 Provider 集成验证。
 - 使用实际 API 检查请求、流式响应和 usage 信息。
-- 最终 MVP 验收时执行真实模型端到端测试。
+- 真实模型 E2E 作为手动验证项保留（默认 skip，不纳入 CI）；发布前如需可单独执行。
 
 ### 4.4 测试失败处理
 

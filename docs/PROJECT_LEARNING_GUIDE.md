@@ -243,7 +243,7 @@ PostgreSQL + storage/ + data/
 - 模型输出不保证完全可复现，但输入、参数、快照、来源可追溯；
 - Chat 文件总量超过预算仍会截断，需要 read_task_file 分页；
 - E2E 使用系统 Edge，未下载 Chromium；
-- UI 视觉细节仍可打磨。
+- UI 已完成 MVP 收尾（All Tasks / Task 左树 / Projects Ledger / 状态色 / 字体统一），后续只做非阻塞优化。
 
 ## 9. 未来可发展（现在不做）
 
