@@ -20,9 +20,9 @@ test('home renders combined overview with switchable charts', async ({ page }) =
 test('global tasks page is reachable from navigation', async ({ page }) => {
   await installMockApi(page)
   await page.goto('/')
-  await page.getByRole('link', { name: 'Tasks' }).click()
+  await page.getByRole('link', { name: 'All Tasks' }).click()
   await expect(page).toHaveURL(/\/tasks$/)
-  await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'All Tasks' })).toBeVisible()
   await expect(page.getByRole('button', { name: '新建 Task' }).first()).toBeVisible()
   await page.getByRole('button', { name: '筛选' }).click()
   await expect(page.getByText('Project 内 Task')).toBeVisible()

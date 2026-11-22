@@ -25,7 +25,7 @@ const router = createRouter({
       path: '/tasks',
       name: 'tasks',
       component: () => import('@/views/TasksView.vue'),
-      meta: { title: 'Tasks' },
+      meta: { title: 'All Tasks' },
     },
     {
       path: '/tasks/:id',

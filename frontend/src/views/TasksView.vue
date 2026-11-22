@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import EntityMenu from '@/components/EntityMenu.vue'
 import LoadingState from '@/components/LoadingState.vue'
@@ -10,6 +11,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import {
   createTask,
+  deleteProject,
   deleteTask,
   listProjects,
   listTasks,
@@ -19,6 +21,10 @@ import type { Project, Task, TaskStatus } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
 import { formatRelative } from '@/utils/format'
+import {
+  readPinnedProjects,
+  togglePinnedProject,
+} from '@/utils/projectPins'
 
 const router = useRouter()
 const app = useAppStore()
@@ -32,6 +38,10 @@ const statusFilters = ref<Array<'active' | 'archived'>>([])
 const scopeFilters = ref<Array<'global' | 'project'>>([])
 const filterOpen = ref(false)
 const expandedGroups = ref<string[]>([])
+const pinnedProjects = ref<string[]>(readPinnedProjects())
+const deleteProjectTarget = ref<{ id: string; name: string } | null>(null)
+const deletingProject = ref(false)
+const openGroupMenu = ref<string | null>(null)
 const creating = ref(false)
 
 const activeFilterCount = computed(
@@ -113,8 +123,53 @@ const projectGroups = computed(() => {
       projectName: projectNames.value.get(projectId) ?? '关联 Project',
       tasks: items,
     }))
-    .sort((a, b) => a.projectName.localeCompare(b.projectName, 'zh-CN'))
+    .sort((a, b) => {
+      const aPinned = pinnedProjects.value.includes(a.projectId)
+      const bPinned = pinnedProjects.value.includes(b.projectId)
+      if (aPinned !== bPinned) return aPinned ? -1 : 1
+      return a.projectName.localeCompare(b.projectName, 'zh-CN')
+    })
 })
+
+function isProjectPinned(projectId: string): boolean {
+  return pinnedProjects.value.includes(projectId)
+}
+
+function toggleProjectPin(projectId: string): void {
+  pinnedProjects.value = togglePinnedProject(pinnedProjects.value, projectId)
+  openGroupMenu.value = null
+}
+
+function toggleGroupMenu(projectId: string): void {
+  openGroupMenu.value = openGroupMenu.value === projectId ? null : projectId
+}
+
+function viewGroupProject(projectId: string): void {
+  openGroupMenu.value = null
+  void router.push('/projects/' + projectId)
+}
+
+function requestDeleteProject(project: { projectId: string; projectName: string }): void {
+  openGroupMenu.value = null
+  deleteProjectTarget.value = { id: project.projectId, name: project.projectName }
+}
+
+async function confirmDeleteProject(): Promise<void> {
+  const target = deleteProjectTarget.value
+  if (!target) return
+  deletingProject.value = true
+  try {
+    await deleteProject(target.id)
+    pinnedProjects.value = pinnedProjects.value.filter((id) => id !== target.id)
+    deleteProjectTarget.value = null
+    app.notify('success', '项目「' + target.name + '」已删除')
+    await load()
+  } catch (err) {
+    app.notifyError(err)
+  } finally {
+    deletingProject.value = false
+  }
+}
 
 function modelLabel(task: Task): string {
   if (!task.model_provider || !task.model_name) return '未配置模型'
@@ -192,7 +247,7 @@ onMounted(() => {
 <template>
   <div class="tasks-view">
     <PageHeader
-      title="Tasks"
+      title="All Tasks"
       description="按 Global Workspace 与 Project 分组的 Task 索引。"
     >
       <template #actions>
@@ -384,11 +439,54 @@ onMounted(() => {
             <h2 class="task-group__title">{{ group.projectName }}</h2>
           </button>
           <div class="task-group__actions">
-            <RouterLink :to="'/projects/' + group.projectId" class="task-group__link">
-              查看 Project
-              <AppIcon name="chevron-right" :size="12" />
-            </RouterLink>
             <span class="task-group__count">{{ group.tasks.length }}</span>
+            <div class="task-group__menu-wrap">
+              <button
+                type="button"
+                class="task-group__menu-trigger"
+                :aria-expanded="openGroupMenu === group.projectId"
+                aria-label="Project 操作"
+                @click.stop="toggleGroupMenu(group.projectId)"
+              >
+                <AppIcon name="more" :size="16" />
+              </button>
+
+              <div
+                v-if="openGroupMenu === group.projectId"
+                class="task-group__menu-backdrop"
+                @click="openGroupMenu = null"
+              />
+              <div
+                v-if="openGroupMenu === group.projectId"
+                class="task-group__menu"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="task-group__menu-item"
+                  @click="toggleProjectPin(group.projectId)"
+                >
+                  <AppIcon name="pin" :size="14" />
+                  {{ isProjectPinned(group.projectId) ? '取消置顶' : '置顶' }}
+                </button>
+                <button
+                  type="button"
+                  class="task-group__menu-item"
+                  @click="viewGroupProject(group.projectId)"
+                >
+                  <AppIcon name="chevron-right" :size="14" />
+                  查看详情
+                </button>
+                <button
+                  type="button"
+                  class="task-group__menu-item task-group__menu-item--danger"
+                  @click="requestDeleteProject(group)"
+                >
+                  <AppIcon name="trash" :size="14" />
+                  删除 Project
+                </button>
+              </div>
+            </div>
           </div>
         </header>
         <ul v-if="isExpanded(group.projectId)" class="task-list">
@@ -421,6 +519,17 @@ onMounted(() => {
         </ul>
       </section>
     </div>
+
+    <ConfirmDialog
+      :open="Boolean(deleteProjectTarget)"
+      title="删除 Project"
+      :message="'确定删除「' + (deleteProjectTarget?.name ?? '') + '」吗？\n\n若 Project 中仍有 Task 或文件引用，后端会拒绝删除。'"
+      confirm-label="删除"
+      danger
+      :busy="deletingProject"
+      @confirm="confirmDeleteProject"
+      @close="deleteProjectTarget = null"
+    />
   </div>
 </template>
 
@@ -642,8 +751,81 @@ onMounted(() => {
 .task-group__actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.task-group__menu-wrap {
+  position: relative;
+}
+
+.task-group__menu-trigger {
+  position: relative;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.task-group__menu-trigger:hover {
+  border-color: var(--border);
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.task-group__menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.task-group__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.task-group__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-group__menu-item:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.task-group__menu-item--danger {
+  color: var(--danger);
+}
+
+.task-group__menu-item--danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .task-group__count {

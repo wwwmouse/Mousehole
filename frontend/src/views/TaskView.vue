@@ -34,6 +34,7 @@ import type {
   TaskUsage,
 } from '@/api/types'
 import { useAppStore } from '@/stores/app'
+import { readPinnedProjects } from '@/utils/projectPins'
 import { errorMessage, isNotFound } from '@/utils/errors'
 import {
   fileTypeLabel,
@@ -71,6 +72,7 @@ const addingFiles = ref(false)
 const models = ref<ModelInfo[]>([])
 const navTasks = ref<Task[]>([])
 const navProjects = ref<Project[]>([])
+const pinnedProjects = readPinnedProjects()
 const modelSaving = ref(false)
 const selectedModel = ref('')
 
@@ -103,7 +105,12 @@ const navProjectGroups = computed(() => {
       projectName: names.get(projectId) ?? '关联 Project',
       tasks: items,
     }))
-    .sort((a, b) => a.projectName.localeCompare(b.projectName, 'zh-CN'))
+    .sort((a, b) => {
+      const aPinned = pinnedProjects.includes(a.projectId)
+      const bPinned = pinnedProjects.includes(b.projectId)
+      if (aPinned !== bPinned) return aPinned ? -1 : 1
+      return a.projectName.localeCompare(b.projectName, 'zh-CN')
+    })
 })
 
 const tabs = computed(() => [
@@ -512,17 +519,16 @@ onMounted(() => {
           </div>
 
           <details
-            v-for="group in navProjectGroups"
-            :key="group.projectId"
+            v-if="navGlobalTasks.length"
             class="task-nav__group"
-            :open="group.projectId === task.project_id"
+            :open="!task.project_id"
           >
             <summary class="task-nav__project">
-              <span class="task-nav__project-name">{{ group.projectName }}</span>
-              <span class="task-nav__count">{{ group.tasks.length }}</span>
+              <span class="task-nav__project-name">Global Workspace</span>
+              <span class="task-nav__count">{{ navGlobalTasks.length }}</span>
             </summary>
             <RouterLink
-              v-for="item in group.tasks"
+              v-for="item in navGlobalTasks"
               :key="item.id"
               :to="'/tasks/' + item.id"
               class="task-nav__item"
@@ -537,16 +543,17 @@ onMounted(() => {
           </details>
 
           <details
-            v-if="navGlobalTasks.length"
+            v-for="group in navProjectGroups"
+            :key="group.projectId"
             class="task-nav__group"
-            :open="!task.project_id"
+            :open="group.projectId === task.project_id"
           >
             <summary class="task-nav__project">
-              <span class="task-nav__project-name">Global Workspace</span>
-              <span class="task-nav__count">{{ navGlobalTasks.length }}</span>
+              <span class="task-nav__project-name">{{ group.projectName }}</span>
+              <span class="task-nav__count">{{ group.tasks.length }}</span>
             </summary>
             <RouterLink
-              v-for="item in navGlobalTasks"
+              v-for="item in group.tasks"
               :key="item.id"
               :to="'/tasks/' + item.id"
               class="task-nav__item"
@@ -948,15 +955,15 @@ onMounted(() => {
 }
 
 .task-nav__flag--active {
-  color: var(--accent);
+  color: #e59a63;
 }
 
 .task-nav__flag--completed {
-  color: var(--success);
+  color: #68d18b;
 }
 
 .task-nav__flag--archived {
-  color: var(--text-faint);
+  color: #9aa0a6;
 }
 
 .task-nav__title {

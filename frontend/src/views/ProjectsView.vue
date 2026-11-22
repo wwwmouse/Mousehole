@@ -155,37 +155,31 @@ onMounted(() => {
       description="尝试调整搜索关键词或状态筛选。"
     />
 
-    <div v-else class="project-grid">
-      <RouterLink
-        v-for="project in filteredProjects"
-        :key="project.id"
-        :to="`/projects/${project.id}`"
-        class="card project-card"
-      >
-        <div class="project-card__head">
-          <span class="project-card__icon"><AppIcon name="folder" :size="16" /></span>
-          <h2 class="project-card__name">{{ project.name }}</h2>
+    <ul v-else class="project-list">
+      <li v-for="project in filteredProjects" :key="project.id" class="project-row-item">
+        <RouterLink :to="`/projects/${project.id}`" class="project-row">
+          <span class="project-row__icon"><AppIcon name="folder" :size="16" /></span>
+          <span class="project-row__main">
+            <span class="project-card__name">{{ project.name }}</span>
+            <span class="project-row__desc">{{ project.description || '暂无描述' }}</span>
+          </span>
+          <span class="project-row__stats">
+            {{ project.task_count }} Tasks · {{ project.file_count }} 文件
+          </span>
+          <span class="project-row__updated">更新于 {{ formatRelative(project.updated_at) }}</span>
           <StatusBadge :status="project.status" kind="project" />
-          <EntityMenu
-            kind="project"
-            :name="project.name"
-            :archived="project.status === 'archived'"
-            @rename="(name) => renameProject(project, name)"
-            @toggle-archive="toggleProjectArchive(project)"
-            @remove="removeProject(project)"
-          />
-        </div>
-        <p class="project-card__desc">
-          {{ project.description || '暂无描述' }}
-        </p>
-        <div class="project-card__footer">
-          <span>{{ project.task_count }} 个 Task</span>
-          <span class="dot-sep" aria-hidden="true">·</span>
-          <span>{{ project.file_count }} 个文件</span>
-          <span class="project-card__updated">更新于 {{ formatRelative(project.updated_at) }}</span>
-        </div>
-      </RouterLink>
-    </div>
+          <AppIcon name="chevron-right" :size="14" class="project-row__chevron" />
+        </RouterLink>
+        <EntityMenu
+          kind="project"
+          :name="project.name"
+          :archived="project.status === 'archived'"
+          @rename="(name) => renameProject(project, name)"
+          @toggle-archive="toggleProjectArchive(project)"
+          @remove="removeProject(project)"
+        />
+      </li>
+    </ul>
 
     <NewProjectModal :open="newProjectOpen" @close="newProjectOpen = false" @created="onCreated" />
   </div>
@@ -239,89 +233,97 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.project-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 26px 32px;
-}
-
-.project-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 2px 14px;
-  border: 0;
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   border-top: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-  transition: border-color 0.15s ease;
 }
 
-.project-card:hover {
-  border-top-color: var(--accent);
-  background: transparent;
-}
-
-.project-card__head {
+.project-row-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
 }
 
-.project-card__icon {
+.project-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 160px 118px auto 18px;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 16px 4px;
+  color: inherit;
+  transition: background 0.13s ease;
+}
+
+.project-row:hover {
+  background: var(--bg-subtle);
+}
+
+.project-row__icon {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
   color: var(--accent);
 }
 
+.project-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
 .project-card__name {
-  flex: 1;
-  margin: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  white-space: nowrap;
+  color: var(--text);
+}
+
+.project-row__desc {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.project-card__desc {
-  margin: 0;
-  min-height: 44px;
-  font-size: 13px;
-  line-height: 1.65;
+  white-space: nowrap;
+  font-size: 12.5px;
   color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
-.project-card__footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+.project-row__stats {
+  font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.01em;
-  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.project-card__updated {
-  margin-left: auto;
+.project-row__updated {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.dot-sep {
-  color: var(--text-faint);
+.project-row__chevron {
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .project-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto 18px;
+  }
+
+  .project-row__stats,
+  .project-row__updated {
+    display: none;
+  }
 }
 
 @media (max-width: 760px) {
