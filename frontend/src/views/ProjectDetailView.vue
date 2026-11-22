@@ -707,25 +707,60 @@ onMounted(() => {
 }
 
 .overview-section {
-  padding: 16px;
+  padding: 18px 20px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.context-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.section-caption {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .overview-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 10px;
+  gap: 32px;
+  margin-top: 16px;
+}
+
+.overview-columns > div {
+  min-width: 0;
 }
 
 .overview-subtitle {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .overview-empty {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -735,39 +770,41 @@ onMounted(() => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .overview-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
 
 .overview-row:hover {
-  border-color: var(--border);
-  background: var(--bg-hover);
+  background: var(--bg-subtle);
 }
 
 .overview-row__title {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text);
 }
 
 .overview-row__meta {
+  flex-shrink: 0;
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .item-list {
