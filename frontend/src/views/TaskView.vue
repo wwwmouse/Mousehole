@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
@@ -57,6 +57,7 @@ const loadError = ref<string | null>(null)
 const notFound = ref(false)
 
 const activeTab = ref<TabKey>('chat')
+const highlightMessageId = ref<string | null>(null)
 const statusDraft = ref<string>('active')
 const statusUpdating = ref(false)
 
@@ -421,6 +422,13 @@ function onUsageUpdated(usage: TaskUsage | null): void {
   if (task.value) task.value = { ...task.value, usage }
 }
 
+async function openSourceMessage(messageId: string): Promise<void> {
+  activeTab.value = 'chat'
+  highlightMessageId.value = null
+  await nextTick()
+  highlightMessageId.value = messageId
+}
+
 watch(taskId, () => {
   activeTab.value = 'chat'
   void load()
@@ -540,6 +548,7 @@ onMounted(() => {
             @usage-updated="onUsageUpdated"
             @task-updated="task = $event"
             @open-artifacts="activeTab = 'artifacts'"
+            :highlight-message-id="highlightMessageId"
           />
         </div>
       </section>
@@ -693,7 +702,10 @@ onMounted(() => {
 
       <!-- Artifacts -->
       <section v-if="activeTab === 'artifacts'" role="tabpanel" class="tab-panel">
-        <TaskArtifacts :task-id="task.id" />
+        <TaskArtifacts
+          :task-id="task.id"
+          @open-source-message="openSourceMessage"
+        />
       </section>
 
       <FilePreviewModal

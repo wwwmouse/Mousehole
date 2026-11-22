@@ -75,6 +75,13 @@ test('core closed loop: upload file -> create project -> task -> chat -> artifac
     page.locator('.artifacts-preview__title', { hasText: 'E2E 成果' }),
   ).toBeVisible()
 
+  // Artifact can jump back to the exact chat turn that produced it.
+  await page.getByRole('button', { name: '查看来源消息' }).click()
+  await expect(page.locator('.chat-message--highlight')).toContainText(
+    '这是 Mock 生成的核心闭环成果。',
+  )
+  await page.getByRole('tab').filter({ hasText: 'Artifacts' }).click()
+
   const actions = page.locator('.artifacts-preview__actions')
   const downloadPromise = page.waitForEvent('download')
   await actions.getByRole('button', { name: '下载' }).click()

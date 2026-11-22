@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
@@ -32,6 +32,7 @@ const props = defineProps<{
   hasModel: boolean
   task: Task
   models: ModelInfo[]
+  highlightMessageId?: string | null
 }>()
 const emit = defineEmits<{
   'usage-updated': [usage: TaskUsage | null]
@@ -52,6 +53,7 @@ const streamText = ref('')
 const streamError = ref<string | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const highlightedMessageId = ref<string | null>(null)
 let controller: AbortController | null = null
 
 const menuOpen = ref(false)
@@ -124,6 +126,29 @@ async function scrollToBottom(): Promise<void> {
   }, 80)
 }
 
+async function scrollToMessage(messageId: string): Promise<void> {
+  await nextTick()
+  const el = listRef.value?.querySelector<HTMLElement>(
+    '[data-message-id="' + messageId + '"]',
+  )
+  if (!el) {
+    app.notify('info', '原消息不在当前对话窗口中')
+    return
+  }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  highlightedMessageId.value = messageId
+  window.setTimeout(() => {
+    if (highlightedMessageId.value === messageId) highlightedMessageId.value = null
+  }, 2600)
+}
+
+watch(
+  () => props.highlightMessageId,
+  (id) => {
+    if (id) void scrollToMessage(id)
+  },
+)
+
 async function load(): Promise<void> {
   loading.value = true
   loadError.value = null
@@ -131,6 +156,7 @@ async function load(): Promise<void> {
     const data = await listTaskMessages(props.taskId)
     messages.value = data.messages
     taskUsage.value = data.task_usage
+    if (props.highlightMessageId) void scrollToMessage(props.highlightMessageId)
     emit('usage-updated', data.task_usage)
     await scrollToBottom()
   } catch (error) {
@@ -429,7 +455,11 @@ onBeforeUnmount(() => {
           v-for="message in messages"
           :key="message.id"
           class="chat-message"
-          :class="`chat-message--${message.role}`"
+          :class="[
+            `chat-message--${message.role}`,
+            { 'chat-message--highlight': highlightedMessageId === message.id },
+          ]"
+          :data-message-id="message.id"
         >
           <details
             v-if="message.role === 'assistant' && message.metadata"
@@ -742,6 +772,21 @@ onBeforeUnmount(() => {
 
 .chat-message--assistant {
   align-self: stretch;
+}
+
+.chat-message--highlight {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+  animation: message-highlight 2.4s ease-out;
+}
+
+@keyframes message-highlight {
+  0% {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
 }
 
 .chat-message__head {

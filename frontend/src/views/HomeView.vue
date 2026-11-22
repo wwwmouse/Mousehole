@@ -100,10 +100,6 @@ function setActiveStat(key: 'conversations' | 'tokens'): void {
   activeStatKey.value = key
 }
 
-function artifactSourceLabel(source: string | null): string {
-  return source === 'execution' ? '正式运行' : 'Chat'
-}
-
 function openArtifact(item: { task_id: string }): void {
   void router.push({
     name: 'task',
@@ -475,7 +471,6 @@ onMounted(() => {
           <span>成果</span>
           <span>Task</span>
           <span>Project</span>
-          <span>来源</span>
           <span>版本</span>
           <span>更新时间</span>
           <span />
@@ -492,7 +487,6 @@ onMounted(() => {
           <span class="artifact-ledger__cell" :title="item.project_name ?? 'Global Workspace'">
             {{ item.project_name ?? 'Global Workspace' }}
           </span>
-          <span class="artifact-ledger__source">{{ artifactSourceLabel(item.source_type) }}</span>
           <span class="artifact-ledger__cell">v{{ item.version }}</span>
           <span class="artifact-ledger__cell">{{ formatRelative(item.created_at) }}</span>
           <AppIcon name="chevron-right" :size="14" class="artifact-ledger__chevron" />
@@ -798,8 +792,8 @@ onMounted(() => {
 .artifact-ledger__row {
   display: grid;
   grid-template-columns:
-    minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 1.1fr)
-    84px 54px 112px 16px;
+    minmax(0, 2.6fr) minmax(0, 1.5fr) minmax(0, 1.2fr)
+    54px 112px 16px;
   gap: 18px;
   align-items: center;
 }
@@ -849,18 +843,6 @@ onMounted(() => {
   white-space: nowrap;
   font-size: 13px;
   color: var(--text-secondary);
-}
-
-.artifact-ledger__source {
-  justify-self: start;
-  padding: 2px 7px;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
 }
 
 .artifact-ledger__chevron {

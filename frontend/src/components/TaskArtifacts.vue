@@ -19,6 +19,7 @@ import { errorMessage } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
 
 const props = defineProps<{ taskId: string }>()
+const emit = defineEmits<{ 'open-source-message': [messageId: string] }>()
 
 const app = useAppStore()
 
@@ -173,13 +174,14 @@ onMounted(() => {
             <h2 class="artifacts-preview__title">{{ selectedArtifact.title }}</h2>
             <p class="artifacts-preview__meta">
               v{{ selectedArtifact.version }}
-              <template v-if="selectedArtifact.source_type === 'chat'">
-                · 来源：对话
-              </template>
-              <template v-else-if="selectedArtifact.source_execution_id">
-                · 来源：运行
-              </template>
-              <template v-else>· 来源：手动</template>
+              <button
+                v-if="selectedArtifact.source_message_id"
+                type="button"
+                class="artifacts-source-link"
+                @click="emit('open-source-message', selectedArtifact.source_message_id)"
+              >
+                查看来源消息
+              </button>
               · {{ formatDateTime(selectedArtifact.created_at) }}
             </p>
           </div>
@@ -366,9 +368,26 @@ onMounted(() => {
 }
 
 .artifacts-preview__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 4px 0 0;
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
+}
+
+.artifacts-source-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.artifacts-source-link:hover {
+  text-decoration: underline;
 }
 
 .artifacts-preview-empty {
