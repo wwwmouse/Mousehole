@@ -52,8 +52,11 @@ function barHeight(value: number): string {
           v-for="(value, index) in values"
           :key="labels[index] ?? index"
           class="bar-chart__item"
-          :title="`${labels[index] ?? ''}: ${format(value)}`"
+          tabindex="0"
         >
+          <span class="bar-chart__tooltip">
+            {{ labels[index] }} · {{ format(value) }}
+          </span>
           <div class="bar-chart__track">
             <div class="bar-chart__bar" :style="{ height: barHeight(value) }" />
           </div>
@@ -119,11 +122,49 @@ function barHeight(value: number): string {
 }
 
 .bar-chart__item {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   height: 100%;
+  outline: none;
+}
+
+.bar-chart__tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  z-index: 5;
+  padding: 5px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    visibility 0.14s ease;
+  pointer-events: none;
+}
+
+.bar-chart__item:hover .bar-chart__tooltip,
+.bar-chart__item:focus-visible .bar-chart__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.bar-chart__item:focus-visible .bar-chart__bar {
+  filter: brightness(1.12);
 }
 
 .bar-chart__track {
@@ -148,8 +189,8 @@ function barHeight(value: number): string {
   height: 20px;
   padding-top: 6px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
+  font-size: 11px;
+  letter-spacing: 0.01em;
   color: var(--text-secondary);
   text-align: center;
   white-space: nowrap;

@@ -24,6 +24,7 @@ class RecentArtifact(BaseModel):
     artifact_id: uuid.UUID
     title: str
     version: int
+    source_type: str | None = None
     task_id: uuid.UUID
     task_title: str
     project_id: uuid.UUID | None

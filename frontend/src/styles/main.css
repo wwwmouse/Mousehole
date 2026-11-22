@@ -11,10 +11,10 @@
   --border-strong: #4a4034;
 
   /* text — warm off-white, readable at small sizes */
-  --text: #ece5d8;
-  --text-secondary: #b9ae9d;
-  --text-muted: #948877;
-  --text-faint: #8f8372;
+  --text: #f0e9dc;
+  --text-secondary: #c6bbaa;
+  --text-muted: #ab9e8b;
+  --text-faint: #998c7a;
 
   /* accent — one copper accent, not default blue */
   --accent: #c97a4a;

@@ -106,6 +106,7 @@ def overview(session: Session, *, days: int = 7) -> StatsOverview:
             artifact_id=artifact.id,
             title=artifact.title,
             version=artifact.version,
+            source_type=artifact.source_type,
             task_id=task.id,
             task_title=task.title,
             project_id=project.id if project else None,

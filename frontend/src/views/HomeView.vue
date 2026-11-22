@@ -100,6 +100,10 @@ function setActiveStat(key: 'conversations' | 'tokens'): void {
   activeStatKey.value = key
 }
 
+function artifactSourceLabel(source: string | null): string {
+  return source === 'execution' ? '正式运行' : 'Chat'
+}
+
 function openArtifact(item: { task_id: string }): void {
   void router.push({
     name: 'task',
@@ -448,7 +452,7 @@ onMounted(() => {
           <h2 class="section-title">最近成果</h2>
           <span class="section-count">{{ recentArtifacts.length }}</span>
         </div>
-        <span class="section-caption">来自 Chat 与正式运行</span>
+        <span class="section-caption">最近 5 条</span>
       </header>
       <LoadingState v-if="loading" compact />
       <div v-else-if="statsError" class="section-error">
@@ -466,22 +470,34 @@ onMounted(() => {
           新建 Task
         </button>
       </EmptyState>
-      <ul v-else class="recent-list">
-        <li v-for="item in recentArtifacts" :key="item.artifact_id" class="recent-list__item">
-          <button type="button" class="recent-row recent-row--button" @click="openArtifact(item)">
-            <span class="recent-row__icon"><AppIcon name="file" :size="15" /></span>
-            <span class="recent-row__main">
-              <span class="recent-row__title">{{ item.title }}</span>
-              <span class="recent-row__meta">
-                {{ item.task_title }}
-                <template v-if="item.project_name"> · {{ item.project_name }}</template>
-                · v{{ item.version }} · {{ formatRelative(item.created_at) }}
-              </span>
-            </span>
-            <AppIcon name="chevron-right" :size="14" />
-          </button>
-        </li>
-      </ul>
+      <div v-else class="artifact-ledger">
+        <div class="artifact-ledger__head" aria-hidden="true">
+          <span>成果</span>
+          <span>Task</span>
+          <span>Project</span>
+          <span>来源</span>
+          <span>版本</span>
+          <span>更新时间</span>
+          <span />
+        </div>
+        <button
+          v-for="item in recentArtifacts"
+          :key="item.artifact_id"
+          type="button"
+          class="artifact-ledger__row"
+          @click="openArtifact(item)"
+        >
+          <span class="artifact-ledger__title" :title="item.title">{{ item.title }}</span>
+          <span class="artifact-ledger__cell" :title="item.task_title">{{ item.task_title }}</span>
+          <span class="artifact-ledger__cell" :title="item.project_name ?? 'Global Workspace'">
+            {{ item.project_name ?? 'Global Workspace' }}
+          </span>
+          <span class="artifact-ledger__source">{{ artifactSourceLabel(item.source_type) }}</span>
+          <span class="artifact-ledger__cell">v{{ item.version }}</span>
+          <span class="artifact-ledger__cell">{{ formatRelative(item.created_at) }}</span>
+          <AppIcon name="chevron-right" :size="14" class="artifact-ledger__chevron" />
+        </button>
+      </div>
     </section>
 
   </div>
@@ -505,10 +521,10 @@ onMounted(() => {
 .hero__date {
   margin: 0 0 10px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.5px;
   text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
 }
 
 .hero__greeting {
@@ -632,8 +648,8 @@ onMounted(() => {
 .overview-panel__note {
   margin: 10px 0 0;
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -666,14 +682,14 @@ onMounted(() => {
 
 .activity-list__en {
   font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 
 .activity-list__cn {
-  font-size: 12px;
+  font-size: 12.5px;
   letter-spacing: 0.01em;
   color: var(--text-muted);
 }
@@ -737,10 +753,10 @@ onMounted(() => {
   align-items: center;
   gap: 3px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .section-link:hover {
@@ -749,10 +765,9 @@ onMounted(() => {
 
 .section-caption {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .section-error {
@@ -773,6 +788,83 @@ onMounted(() => {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.artifact-ledger {
+  margin: 0 2px;
+}
+
+.artifact-ledger__head,
+.artifact-ledger__row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 1.1fr)
+    84px 54px 112px 16px;
+  gap: 18px;
+  align-items: center;
+}
+
+.artifact-ledger__head {
+  padding: 0 2px 9px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.artifact-ledger__row {
+  width: 100%;
+  padding: 15px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.13s ease;
+}
+
+.artifact-ledger__row:hover {
+  background: var(--bg-subtle);
+}
+
+.artifact-ledger__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.artifact-ledger__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.artifact-ledger__source {
+  justify-self: start;
+  padding: 2px 7px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.artifact-ledger__chevron {
+  color: var(--text-muted);
 }
 
 .recent-list__item {

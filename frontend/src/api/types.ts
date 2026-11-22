@@ -221,6 +221,7 @@ export interface RecentArtifact {
   version: number
   task_id: string
   task_title: string
+  source_type: string | null
   project_id: string | null
   project_name: string | null
   created_at: string
