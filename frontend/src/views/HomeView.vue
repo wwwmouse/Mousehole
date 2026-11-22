@@ -308,19 +308,27 @@ onMounted(() => {
         </header>
         <ul class="activity-list">
           <li>
-            <span class="activity-list__label">Tasks</span>
+            <span class="activity-list__label">
+              <span class="activity-list__en">Tasks</span>
+              <span class="activity-list__cn">未归档任务</span>
+            </span>
             <strong class="activity-list__value">{{ activeTasks }}</strong>
           </li>
           <li>
-            <span class="activity-list__label">Projects</span>
+            <span class="activity-list__label">
+              <span class="activity-list__en">Projects</span>
+              <span class="activity-list__cn">未归档项目</span>
+            </span>
             <strong class="activity-list__value">{{ activeProjects }}</strong>
           </li>
           <li>
-            <span class="activity-list__label">Library</span>
+            <span class="activity-list__label">
+              <span class="activity-list__en">Library</span>
+              <span class="activity-list__cn">资料库文件总数</span>
+            </span>
             <strong class="activity-list__value">{{ libraryCount }}</strong>
           </li>
         </ul>
-        <p class="overview-panel__note">未归档任务 / 项目与资料库文件总数</p>
       </aside>
     </section>
 
@@ -650,10 +658,23 @@ onMounted(() => {
 }
 
 .activity-list__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activity-list__en {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.activity-list__cn {
+  font-size: 12px;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
 }
 

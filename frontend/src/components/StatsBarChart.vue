@@ -77,10 +77,10 @@ function barHeight(value: number): string {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 34px;
-  padding-bottom: 18px;
+  width: 36px;
+  padding-bottom: 20px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 9.5px;
   letter-spacing: 0.02em;
   line-height: 1;
   color: var(--text-muted);
@@ -97,7 +97,7 @@ function barHeight(value: number): string {
 
 .bar-chart__grid {
   position: absolute;
-  inset: 0 0 18px;
+  inset: 0 0 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -129,13 +129,15 @@ function barHeight(value: number): string {
 .bar-chart__track {
   display: flex;
   flex: 1;
+  justify-content: center;
   align-items: flex-end;
   width: 100%;
   min-height: 0;
 }
 
 .bar-chart__bar {
-  width: 100%;
+  width: 58%;
+  max-width: 46px;
   min-height: 2px;
   border-radius: 1px 1px 0 0;
   background: var(--accent);
@@ -143,12 +145,13 @@ function barHeight(value: number): string {
 }
 
 .bar-chart__label {
-  height: 18px;
-  padding-top: 5px;
+  height: 20px;
+  padding-top: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10.5px;
   letter-spacing: 0.02em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  text-align: center;
   white-space: nowrap;
 }
 </style>
