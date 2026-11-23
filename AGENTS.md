@@ -9,17 +9,20 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：Phase 1–4 已完成并通过 MVP 功能验收（统计/Overview/筛选/运行历史、Docker 生产/开发栈、备份恢复、Playwright E2E、文件预览、SSE 流式与临时文件单轮化；2026-11-22 完成 All Tasks / Task 左树 / Projects Ledger / 状态色与字体统一等 UI 收尾）。
-当前处于 MVP 冻结与发布收尾阶段，准备打 tag；下一个交付点 = 用户决定 Phase 5 范围。
+当前状态：**v0.2.0-mvp 已发布**（Phase 1–4 完成并通过 MVP 功能验收）。当前阶段 Phase 5（v0.3.0「复用与可信」）进行中；post-MVP 所有阶段的规划、决策、验收与发布记录统一在 `docs/ROADMAP.md`——**一个阶段一个章节，不再新建 Phase 专属文档**。
+MVP 期文档（`PRODUCT_SPEC`、`MVP_SPEC`、`TECHNICAL_DECISIONS`、`DEVELOPMENT_PLAN`）已归档冻结在 `docs/archive/mvp/`，只读；`ARCHITECTURE` / `DATA_MODEL` / `UI_GUIDE` 为技术现状文档，可包含已确认但尚未实现的阶段增量（必须标注"未实现"），阶段交付后回填实装补充。
 
 ## 2. 开工前必读（按顺序）
 
-1. `docs/MVP_SPEC.md`：本轮做什么、不做什么。
-2. `docs/DATA_MODEL.md`：实体、字段、关系、删除规则。
-3. `docs/TECHNICAL_DECISIONS.md`：技术栈与工程约束。
-4. `docs/ARCHITECTURE.md`：模块职责、依赖方向、Execution Pipeline。
-5. `docs/UI_SPEC.md`：页面结构与交互。
-6. `docs/DEVELOPMENT_PLAN.md`：当前 Phase 的交付物与验收。
+1. `docs/ROADMAP.md`：当前阶段规格、后续阶段候选、Backlog、阶段流程与文档规则（最高优先）。
+2. `docs/ARCHITECTURE.md`：模块边界、依赖方向、关键流程、扩展点。
+3. `docs/DATA_MODEL.md`：实体关系、不变量、删除规则、迁移策略。
+4. `docs/UI_GUIDE.md`：页面地图与交互红线（前端任务时必读）。
+5. 本文 `AGENTS.md`：工程红线与权限边界。
+
+历史文档：`docs/archive/mvp/`（MVP 只读归档）；学习笔记：`docs/notes/PROJECT_LEARNING_GUIDE.md`（非规范）。
+
+> 文档版本跟随最近交付阶段：当前为 `v0.2.0-mvp`；Phase 5 交付后 living 文档统一升到 `v0.3.0`。
 
 只做当前 Phase 的事。不属于本 Phase 的"顺手改进"一律不做，最多记入待办。
 
@@ -28,7 +31,7 @@ MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 
 - 更换既定技术栈（Vue 3 / FastAPI / PostgreSQL / SSE / 进程内 Scheduler）；
 - 修改核心实体、字段、关系或状态枚举；
 - 调整模块职责、依赖方向、分层规则；
-- 扩大或缩小 MVP 范围；
+- 扩大或缩小 MVP / 当前阶段的范围；
 - 引入大型依赖或新基础设施（消息队列、缓存、向量库、组件库、ORM 变更等）；
 - 执行 `git commit` / `push` / 切分支 / 改远程仓库（Git 只读，改动留在工作区）。
 

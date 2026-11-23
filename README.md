@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**状态：Phase 1–4 已完成，MVP 功能验收通过。** 当前处于 MVP 冻结与发布收尾阶段，准备打 tag。
+**状态：v0.2.0-mvp 已发布（Phase 1–4 完成，MVP 功能验收通过）。Phase 5（v0.3.0「复用与可信」）进行中。** 后续阶段规划、决策与发布记录见 [演进路线](docs/ROADMAP.md)。
 
 ## 核心闭环
 
@@ -129,10 +129,10 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 
 ## 文档
 
-- [项目学习笔记：架构与 Agent 开发](docs/PROJECT_LEARNING_GUIDE.md)
-- [产品与 MVP 范围](docs/PRODUCT_SPEC.md) · [MVP 规范](docs/MVP_SPEC.md)
-- [数据模型](docs/DATA_MODEL.md) · [技术决策](docs/TECHNICAL_DECISIONS.md)
-- [架构](docs/ARCHITECTURE.md) · [UI 规范](docs/UI_SPEC.md)
-- [开发计划与验收记录](docs/DEVELOPMENT_PLAN.md)
-- [Agent 开发约束](AGENTS.md)
+- [演进路线：Phase 5+ 阶段规划、决策与发布记录](docs/ROADMAP.md)
+- [架构](docs/ARCHITECTURE.md) · [数据模型](docs/DATA_MODEL.md) · [界面与交互指南](docs/UI_GUIDE.md)
+- [工程约束](AGENTS.md)
+- [MVP 文档归档（只读）](docs/archive/mvp/INDEX.md) · [项目学习笔记](docs/notes/PROJECT_LEARNING_GUIDE.md)
+
+> 现行规范以 `ROADMAP.md` + `ARCHITECTURE` / `DATA_MODEL` / `UI_GUIDE` 为准；MVP 期文档已归档冻结，仅供参考。
 

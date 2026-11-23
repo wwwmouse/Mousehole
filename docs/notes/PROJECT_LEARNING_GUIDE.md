@@ -8,7 +8,7 @@
 > 2. 搞清楚一次 Agent 请求/执行在代码里怎么走；
 > 3. 搞清楚如果要自己从零实现，关键步骤对应哪些文件夹。
 >
-> 完整架构设计见 [ARCHITECTURE.md](ARCHITECTURE.md)，技术取舍见 [TECHNICAL_DECISIONS.md](TECHNICAL_DECISIONS.md)。
+> 完整架构设计见 [ARCHITECTURE.md](../ARCHITECTURE.md)，技术取舍见 [TECHNICAL_DECISIONS.md](../archive/mvp/TECHNICAL_DECISIONS.md)（已归档）。
 
 ## 0. 一句话理解
 
