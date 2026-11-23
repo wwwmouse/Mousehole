@@ -43,6 +43,8 @@ const deleting = ref(false)
 const previewFileId = ref<string | null>(null)
 
 const attachments = ref<SkillFileInfo[]>([])
+type PendingAsset = { file: File; path: string }
+const pendingAssets = ref<PendingAsset[]>([])
 const assetUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const folderInput = ref<HTMLInputElement | null>(null)
@@ -59,25 +61,39 @@ async function onAssetSelected(event: Event, withPath: boolean): Promise<void> {
   const inputEl = event.target as HTMLInputElement
   const files = Array.from(inputEl.files ?? [])
   inputEl.value = ''
-  const skill = editing.value
-  if (!skill || files.length === 0) return
+  if (files.length === 0) return
+
+  const selected = files.map((file) => ({
+    file,
+    path: withPath
+      ? (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+        file.name
+      : file.name,
+  }))
+
+  // 新建 Skill 尚未入库：先在弹窗内暂存，保存时再上传并关联。
+  if (!editing.value) {
+    pendingAssets.value = [...pendingAssets.value, ...selected]
+    return
+  }
+
   assetUploading.value = true
   try {
-    for (const file of files) {
-      const uploaded = await uploadFile(file)
-      const relative = withPath
-        ? (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-          file.name
-        : file.name
-      await addSkillFile(skill.id, uploaded.id, relative)
+    for (const item of selected) {
+      const uploaded = await uploadFile(item.file)
+      await addSkillFile(editing.value.id, uploaded.id, item.path)
     }
-    await loadAttachments(skill.id)
-    app.notify('success', `已添加 ${files.length} 个资料文件`)
+    await loadAttachments(editing.value.id)
+    app.notify('success', '已添加 ' + selected.length + ' 个资料文件')
   } catch (err) {
     app.notifyError(err)
   } finally {
     assetUploading.value = false
   }
+}
+
+function removePendingAsset(index: number): void {
+  pendingAssets.value = pendingAssets.value.filter((_, i) => i !== index)
 }
 
 async function removeAttachment(item: SkillFileInfo): Promise<void> {
@@ -110,6 +126,7 @@ function resetFormSnapshot(): void {
 function openCreate(): void {
   editing.value = null
   attachments.value = []
+  pendingAssets.value = []
   form.value = { name: '', description: '', instruction: '', system_prompt: '' }
   resetFormSnapshot()
   modalOpen.value = true
@@ -117,6 +134,7 @@ function openCreate(): void {
 
 function openEdit(skill: Skill): void {
   editing.value = skill
+  pendingAssets.value = []
   form.value = {
     name: skill.name,
     description: skill.description ?? '',
@@ -160,12 +178,21 @@ async function submit(): Promise<void> {
       })
       app.notify('success', 'Skill 已更新')
     } else {
-      await createSkill({
+      const stagedUploads: { fileId: string; path: string }[] = []
+      for (const item of pendingAssets.value) {
+        const uploaded = await uploadFile(item.file)
+        stagedUploads.push({ fileId: uploaded.id, path: item.path })
+      }
+      const skill = await createSkill({
         name,
         description: form.value.description,
         instruction,
         system_prompt: form.value.system_prompt,
       })
+      for (const item of stagedUploads) {
+        await addSkillFile(skill.id, item.fileId, item.path)
+      }
+      pendingAssets.value = []
       app.notify('success', 'Skill 已添加')
     }
     modalOpen.value = false
@@ -294,7 +321,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="btn btn--ghost btn--sm"
-                :disabled="!editing || assetUploading"
+                :disabled="assetUploading"
                 @click="fileInput?.click()"
               >
                 <AppIcon name="upload" :size="13" />
@@ -303,7 +330,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="btn btn--ghost btn--sm"
-                :disabled="!editing || assetUploading"
+                :disabled="assetUploading"
                 @click="folderInput?.click()"
               >
                 <AppIcon name="folder" :size="13" />
@@ -311,8 +338,23 @@ onMounted(() => {
               </button>
             </div>
           </div>
-          <p v-if="!editing" class="skill-assets__hint">保存 Skill 后，可以在编辑里添加文件或文件夹。</p>
-          <ul v-else-if="attachments.length" class="skill-assets__list">
+          <ul v-if="attachments.length || pendingAssets.length" class="skill-assets__list">
+            <li
+              v-for="(item, index) in pendingAssets"
+              :key="'pending-' + index"
+              class="skill-assets__item"
+            >
+              <AppIcon name="file" :size="12" />
+              <span class="skill-assets__path">{{ item.path }}</span>
+              <span class="skill-assets__pending">待保存</span>
+              <button
+                type="button"
+                class="btn btn--ghost btn--sm"
+                @click="removePendingAsset(index)"
+              >
+                移除
+              </button>
+            </li>
             <li v-for="item in attachments" :key="item.file_id" class="skill-assets__item">
               <AppIcon name="file" :size="12" />
               <button
@@ -331,7 +373,8 @@ onMounted(() => {
               </button>
             </li>
           </ul>
-          <p v-else class="skill-assets__hint">还没有资料文件；可上传模板、参考资料或整个文件夹。</p>
+          <p v-else-if="editing" class="skill-assets__hint">还没有资料文件；可上传模板、参考资料或整个文件夹。</p>
+          <p v-else class="skill-assets__hint">可直接选择文件或文件夹，保存 Skill 时自动上传并关联。</p>
           <input
             ref="fileInput"
             class="hidden-input"
@@ -597,6 +640,13 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-assets__pending {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
 }
 
 .skill-assets__path--button {
