@@ -104,7 +104,7 @@ docker compose up -d
 ```powershell
 # 后端
 cd backend
-.\.venv\Scripts\python.exe -m pytest tests -q       # 当前 104 passed
+.\.venv\Scripts\python.exe -m pytest tests -q       # 当前 107 passed
 
 # 前端构建
 cd ..\frontend
@@ -118,8 +118,9 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 
 ## 主要能力
 
-- Project / Task / File 管理，PDF、Markdown、TXT 解析，文件继承与引用保护；
+- Project / Task / File 管理，支持 PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS 文本资料；
 - All Tasks 全局索引：按 Global Workspace / Project 分组，支持置顶、筛选、三点菜单；
+- Skill Library：名称必填，描述/指令/System Prompt 可选；创建时可直接上传文件或文件夹；
 - Task Chat：SSE 流式输出、临时文件单轮引用、Skill 引用、受控工具调用；
 - Execution：确定性 Pipeline、状态/阶段进度、取消、文件快照、失败显式；
 - Artifact：独立版本化成果，支持下载与删除；
