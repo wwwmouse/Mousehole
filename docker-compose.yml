@@ -28,6 +28,10 @@ services:
       STORAGE_DIR: /data/storage
       DATA_DIR: /data/data
       CORS_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-2}
+      PARSE_TIMEOUT_SECONDS: ${PARSE_TIMEOUT_SECONDS:-120}
+      DEFAULT_CONTEXT_BUDGET_TOKENS: ${DEFAULT_CONTEXT_BUDGET_TOKENS:-32768}
     volumes:
       - ./storage:/data/storage
       - ./data:/data/data

@@ -25,4 +25,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute('ALTER TABLE workspaces DROP COLUMN IF EXISTS context_budget_tokens')
+    # No-op on purpose: the column belongs to f6a7b8c9d0e1 (its upgrade added
+    # it and its downgrade drops it). Dropping it here as well made
+    # `alembic downgrade base` fail with 42703 (column does not exist).
+    # Found by the Phase 5 H3 migration-chain test.
+    pass

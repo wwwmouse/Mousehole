@@ -33,6 +33,24 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # --- Phase 5 (H1/H5) runtime knobs -------------------------------------
+    # Logging: stdlib level name; sensitive values are filtered by core.logging.
+    log_level: str = "INFO"
+    # Scheduler worker count (was hardcoded to 2 in main.py).
+    max_concurrency: int = 2
+    # Upper bound for a single file's read+parse job (seconds).
+    parse_timeout_seconds: float = 120.0
+    # Fallback context budget when Workspace/Task does not override it.
+    default_context_budget_tokens: int = 32_768
+    # Known model windows, keyed "provider/model"; unknown models use
+    # builder.DEFAULT_WINDOW. Override with MODEL_CONTEXT_WINDOWS='{"p/m": 8192}'.
+    model_context_windows: dict[str, int] = {
+        "deepseek/deepseek-flash": 1_000_000,
+        "deepseek/deepseek-v4-pro": 1_000_000,
+        "openai/gpt-4o": 128_000,
+        "openai/gpt-4o-mini": 128_000,
+    }
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024

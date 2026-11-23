@@ -72,6 +72,9 @@ async def stream_openai(
                     choices = event.get("choices") or []
                     if choices:
                         delta = choices[0].get("delta") or {}
+                        reasoning = delta.get("reasoning_content")
+                        if reasoning:
+                            yield {"type": "reasoning", "text": reasoning}
                         text = delta.get("content")
                         if text:
                             yield {"type": "delta", "text": text}
@@ -151,6 +154,7 @@ async def complete_openai(
     tools: list[dict[str, Any]] | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    thinking: bool | None = None,
 ) -> dict[str, Any]:
     api_key = config.get("api_key") or ""
     if not api_key:
@@ -166,6 +170,11 @@ async def complete_openai(
         payload["temperature"] = temperature
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
+    # DeepSeek V4 thinking mode: when tools are used, all prior reasoning_content
+    # must be passed back. Callers that cannot provide complete reasoning history
+    # can explicitly disable thinking for that request.
+    if thinking is False and "deepseek" in (config.get("base_url") or ""):
+        payload["thinking"] = {"type": "disabled"}
     try:
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
             response = await client.post(
@@ -204,6 +213,7 @@ async def complete_openai(
         )
     return {
         "content": message.get("content") or "",
+        "reasoning_content": message.get("reasoning_content"),
         "tool_calls": tool_calls,
         "usage": normalize_usage(data.get("usage")),
     }
@@ -280,6 +290,7 @@ async def complete(
     tools: list[dict[str, Any]] | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    thinking: bool | None = None,
 ) -> dict[str, Any]:
     kind = config.get("kind")
     if kind == "openai":
@@ -290,6 +301,7 @@ async def complete(
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
+            thinking=thinking,
         )
     if kind == "ollama":
         return await complete_ollama(

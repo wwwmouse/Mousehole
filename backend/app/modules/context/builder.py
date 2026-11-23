@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 
+from app.core.config import get_settings
 from app.modules.context import service as context_service
 from app.modules.document import service as document_service
 from app.modules.file.models import File
@@ -11,13 +13,9 @@ from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
 from app.shared.exceptions import FileParseError
 
-# Known context windows (tokens). Unknown models fall back to DEFAULT_WINDOW.
-MODEL_CONTEXT_WINDOWS: dict[tuple[str, str], int] = {
-    ("deepseek", "deepseek-flash"): 1_000_000,
-    ("deepseek", "deepseek-v4-pro"): 1_000_000,
-    ("openai", "gpt-4o"): 128_000,
-    ("openai", "gpt-4o-mini"): 128_000,
-}
+# Unknown models fall back to DEFAULT_WINDOW; known windows come from settings
+# (Settings.model_context_windows, keyed "provider/model") so they can be
+# overridden without a code change (Phase 5 H5).
 DEFAULT_WINDOW = 32_000
 OUTPUT_RESERVE = 4_096
 OVERHEAD_RESERVE = 1_024
@@ -37,7 +35,8 @@ def compute_budget(
     model: str,
     max_tokens: int | None = None,
 ) -> int:
-    window = MODEL_CONTEXT_WINDOWS.get((provider, model), DEFAULT_WINDOW)
+    windows = get_settings().model_context_windows
+    window = windows.get(f"{provider}/{model}", DEFAULT_WINDOW)
     reserve_output = max_tokens or OUTPUT_RESERVE
     budget = window - reserve_output - OVERHEAD_RESERVE
     if workspace is not None and workspace.context_budget_tokens:
@@ -73,6 +72,59 @@ def collect_file_texts(session, task: Task) -> list[FileText]:
         data = storage.read(file_row.storage_key)
         try:
             text = document_service.extract_text(file_row.file_type, data)
+        except FileParseError as exc:
+            raise FileParseError(
+                f"文件解析失败：{file_row.filename}（{exc.message}）",
+                details={"filename": file_row.filename},
+            ) from exc
+        texts.append(
+            FileText(file=file_row, source_type=entry.source, text=text)
+        )
+    return texts
+
+
+def _parse_timeout(timeout_seconds: float | None) -> float:
+    if timeout_seconds is not None:
+        return max(0.1, float(timeout_seconds))
+    return max(0.1, float(get_settings().parse_timeout_seconds))
+
+
+def _read_and_parse_sync(file_row: File) -> str:
+    """Blocking storage read + text extraction; always run in a worker thread."""
+    data = get_storage().read(file_row.storage_key)
+    return document_service.extract_text(file_row.file_type, data)
+
+
+async def _extract_text_async(file_row: File, timeout_seconds: float | None) -> str:
+    timeout = _parse_timeout(timeout_seconds)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_read_and_parse_sync, file_row), timeout=timeout
+        )
+    except TimeoutError as exc:
+        raise FileParseError(
+            f"解析超时（超过 {timeout:g}s）",
+            details={"filename": file_row.filename},
+        ) from exc
+
+
+async def collect_file_texts_async(
+    session, task: Task, *, timeout_seconds: float | None = None
+) -> list[FileText]:
+    """Async variant of collect_file_texts (Phase 5 H1).
+
+    DB access stays on the event-loop thread; storage read + parsing run in a
+    worker thread with a bounded timeout, so a large file cannot block the API
+    or SSE delivery. Parse errors still fail explicitly.
+    """
+    response = context_service.compute_task_files(session, task)
+    texts: list[FileText] = []
+    for entry in response.available:
+        file_row = session.get(File, entry.file.id)
+        if file_row is None:
+            continue
+        try:
+            text = await _extract_text_async(file_row, timeout_seconds)
         except FileParseError as exc:
             raise FileParseError(
                 f"文件解析失败：{file_row.filename}（{exc.message}）",
@@ -120,6 +172,38 @@ def collect_skill_asset_texts(session, skill) -> list[FileText]:
         data = storage.read(file_row.storage_key)
         try:
             text = document_service.extract_text(file_row.file_type, data)
+        except FileParseError as exc:
+            raise FileParseError(
+                f"Skill 资料解析失败：{file_row.filename}（{exc.message}）",
+                details={"filename": file_row.filename},
+            ) from exc
+        texts.append(
+            FileText(
+                file=file_row,
+                source_type="skill_asset",
+                text=text,
+                path=link.path,
+            )
+        )
+    return texts
+
+
+async def collect_skill_asset_texts_async(
+    session, skill, *, timeout_seconds: float | None = None
+) -> list[FileText]:
+    """Async variant of collect_skill_asset_texts (Phase 5 H1)."""
+    from app.modules.skill import service as skill_service
+
+    if skill is None:
+        return []
+    try:
+        skill_id = uuid.UUID(str(skill.id))
+    except (ValueError, AttributeError, TypeError):
+        return []
+    texts: list[FileText] = []
+    for link, file_row in skill_service.list_skill_files(session, skill_id):
+        try:
+            text = await _extract_text_async(file_row, timeout_seconds)
         except FileParseError as exc:
             raise FileParseError(
                 f"Skill 资料解析失败：{file_row.filename}（{exc.message}）",

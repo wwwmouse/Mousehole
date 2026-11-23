@@ -43,6 +43,15 @@ import {
   formatRelative,
   taskStatusLabel,
 } from '@/utils/format'
+import {
+  buildFileRows,
+  fileRowSourceLabel,
+  filterFileRows,
+  partitionTaskFiles,
+  type FileFilter,
+  type FileRow,
+} from '@/utils/taskFiles'
+import { buildTaskNavigation } from '@/utils/taskNav'
 
 type TabKey = 'chat' | 'settings' | 'artifacts'
 
@@ -86,32 +95,13 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
   { value: 'archived', label: '已归档' },
 ]
 
-const navGlobalTasks = computed(() =>
-  navTasks.value.filter((item) => !item.project_id),
+const navigation = computed(() =>
+  buildTaskNavigation(navTasks.value, navProjects.value, pinnedProjects),
 )
 
-const navProjectGroups = computed(() => {
-  const groups = new Map<string, Task[]>()
-  for (const item of navTasks.value) {
-    if (!item.project_id) continue
-    const list = groups.get(item.project_id) ?? []
-    list.push(item)
-    groups.set(item.project_id, list)
-  }
-  const names = new Map(navProjects.value.map((item) => [item.id, item.name]))
-  return Array.from(groups.entries())
-    .map(([projectId, items]) => ({
-      projectId,
-      projectName: names.get(projectId) ?? '关联 Project',
-      tasks: items,
-    }))
-    .sort((a, b) => {
-      const aPinned = pinnedProjects.includes(a.projectId)
-      const bPinned = pinnedProjects.includes(b.projectId)
-      if (aPinned !== bPinned) return aPinned ? -1 : 1
-      return a.projectName.localeCompare(b.projectName, 'zh-CN')
-    })
-})
+const navGlobalTasks = computed(() => navigation.value.globalTasks)
+
+const navProjectGroups = computed(() => navigation.value.projectGroups)
 
 const tabs = computed(() => [
   { key: 'chat' as TabKey, label: 'Chat' },
@@ -119,55 +109,25 @@ const tabs = computed(() => [
   { key: 'artifacts' as TabKey, label: 'Artifacts' },
 ])
 
-// Backend may label inherited files "project_inherited" (current contract) or
-// the shorter "project"; treat both as project-inherited so the UI never
-// misclassifies a file.
-function isInherited(item: TaskAvailableFile): boolean {
-  return item.source === 'project' || item.source === 'project_inherited'
-}
+const filePartition = computed(() => partitionTaskFiles(fileContext.value))
 
-const projectFiles = computed<TaskAvailableFile[]>(
-  () => (fileContext.value?.available ?? []).filter(isInherited),
-)
+const projectFiles = computed(() => filePartition.value.projectFiles)
 
-const extraFiles = computed<TaskAvailableFile[]>(
-  () => (fileContext.value?.available ?? []).filter((item) => !isInherited(item)),
-)
+const extraFiles = computed(() => filePartition.value.extraFiles)
 
-const excludedFiles = computed<FileItem[]>(() => fileContext.value?.excluded ?? [])
+const excludedFiles = computed(() => filePartition.value.excludedFiles)
 
-const totalAvailable = computed(() => fileContext.value?.available.length ?? 0)
+const totalAvailable = computed(() => filePartition.value.totalAvailable)
 
-const pickerExcludedIds = computed<string[]>(() => [
-  ...(fileContext.value?.available ?? []).map((item) => item.file.id),
-  ...(fileContext.value?.excluded ?? []).map((file) => file.id),
-])
-
-type FileRowSource = 'project_inherited' | 'task_added' | 'excluded'
-type FileFilter = 'all' | FileRowSource
-
-interface FileRow {
-  file: FileItem
-  source: FileRowSource
-}
+const pickerExcludedIds = computed(() => filePartition.value.pickerExcludedIds)
 
 const fileFilter = ref<FileFilter>('all')
-const fileRows = computed<FileRow[]>(() => [
-  ...projectFiles.value.map((item) => ({ file: item.file, source: 'project_inherited' as const })),
-  ...extraFiles.value.map((item) => ({ file: item.file, source: 'task_added' as const })),
-  ...excludedFiles.value.map((file) => ({ file, source: 'excluded' as const })),
-])
-const visibleFileRows = computed<FileRow[]>(() =>
-  fileFilter.value === 'all'
-    ? fileRows.value
-    : fileRows.value.filter((row) => row.source === fileFilter.value),
-)
 
-function sourceLabel(source: FileRowSource): string {
-  if (source === 'project_inherited') return '项目继承'
-  if (source === 'task_added') return '额外引用'
-  return '已排除'
-}
+const fileRows = computed<FileRow[]>(() => buildFileRows(filePartition.value))
+
+const visibleFileRows = computed<FileRow[]>(() =>
+  filterFileRows(fileRows.value, fileFilter.value),
+)
 
 async function handleFileAction(row: FileRow): Promise<void> {
   if (row.source === 'excluded') {
@@ -789,7 +749,7 @@ onMounted(() => {
                   </span>
                 </button>
                 <span class="file-item__source" :class="'file-item__source--' + row.source">
-                  {{ sourceLabel(row.source) }}
+                  {{ fileRowSourceLabel(row.source) }}
                 </span>
                 <button
                   type="button"

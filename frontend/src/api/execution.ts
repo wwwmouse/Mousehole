@@ -1,4 +1,5 @@
 import { ApiError } from './client'
+import { createSseParser } from '@/utils/sse'
 
 export type ExecutionEventName =
   | 'snapshot'
@@ -16,26 +17,15 @@ export interface ExecutionEventHandlers {
   onError?: (error: ApiError) => void
 }
 
-const TERMINAL = new Set([
+const TERMINAL_EVENTS = new Set([
   'execution.completed',
   'execution.failed',
   'execution.cancelled',
 ])
 
-function parseChunk(raw: string): { event: string; data: Record<string, unknown> } | null {
-  const lines = raw.split('\n')
-  let event = 'message'
-  const dataLines: string[] = []
-  for (const line of lines) {
-    if (line.startsWith('event:')) event = line.slice(6).trim()
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-  }
-  if (dataLines.length === 0) return null
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) as Record<string, unknown> }
-  } catch {
-    return null
-  }
+/** True once the execution reached a final status event. */
+export function isTerminalExecutionEvent(event: string): boolean {
+  return TERMINAL_EVENTS.has(event)
 }
 
 /** Consume the execution SSE stream until it reaches a terminal status. */
@@ -68,25 +58,15 @@ export async function streamExecutionEvents(
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
-  let buffer = ''
+  const parser = createSseParser({ skipComments: true })
 
   try {
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let index = buffer.indexOf('\n\n')
-      while (index >= 0) {
-        const chunk = buffer.slice(0, index)
-        buffer = buffer.slice(index + 2)
-        if (chunk.trim() && !chunk.startsWith(':')) {
-          const parsed = parseChunk(chunk)
-          if (parsed) {
-            handlers.onEvent(parsed.event, parsed.data)
-            if (TERMINAL.has(parsed.event)) return
-          }
-        }
-        index = buffer.indexOf('\n\n')
+      for (const item of parser.feed(decoder.decode(value, { stream: true }))) {
+        handlers.onEvent(item.event, item.data)
+        if (isTerminalExecutionEvent(item.event)) return
       }
     }
   } finally {

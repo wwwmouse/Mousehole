@@ -158,9 +158,86 @@ def update_task(session: Session, task_id: uuid.UUID, payload: TaskUpdate) -> Ta
 
 def delete_task(session: Session, task_id: uuid.UUID) -> None:
     task = get_task(session, task_id)
-    repository.delete(session, task)
-    session.commit()
-    # Task-scoped temporary files are hidden from the Library; discard them.
-    from app.modules.file import service as file_service
 
-    file_service.cleanup_task_temporary_files(session, task_id)
+    # Task owns conversations/messages, executions (steps/snapshots), artifact
+    # series/versions and temporary files. Their FKs are RESTRICT, so delete
+    # dependents explicitly in dependency order instead of relying on cascades.
+    from sqlalchemy import delete, select
+
+    from app.modules.artifact.models import Artifact, ArtifactSeries
+    from app.modules.conversation.models import Conversation, Message
+    from app.modules.execution.models import (
+        Execution,
+        ExecutionFileSnapshot,
+        ExecutionStep,
+    )
+    from app.modules.file.models import File, TaskFileOverride
+    from app.modules.file.storage import get_storage
+    from app.modules.skill.models import TaskSkill
+
+    series_ids = list(
+        session.scalars(
+            select(ArtifactSeries.id).where(ArtifactSeries.task_id == task_id)
+        )
+    )
+    if series_ids:
+        # Artifact -> Execution FK is RESTRICT, so remove versions before runs.
+        session.execute(delete(Artifact).where(Artifact.series_id.in_(series_ids)))
+        session.execute(
+            delete(ArtifactSeries).where(ArtifactSeries.id.in_(series_ids))
+        )
+
+    execution_ids = list(
+        session.scalars(select(Execution.id).where(Execution.task_id == task_id))
+    )
+    if execution_ids:
+        session.execute(
+            delete(ExecutionFileSnapshot).where(
+                ExecutionFileSnapshot.execution_id.in_(execution_ids)
+            )
+        )
+        session.execute(
+            delete(ExecutionStep).where(
+                ExecutionStep.execution_id.in_(execution_ids)
+            )
+        )
+        session.execute(delete(Execution).where(Execution.id.in_(execution_ids)))
+
+    conversation_ids = list(
+        session.scalars(
+            select(Conversation.id).where(Conversation.task_id == task_id)
+        )
+    )
+    if conversation_ids:
+        session.execute(
+            delete(Message).where(Message.conversation_id.in_(conversation_ids))
+        )
+        session.execute(
+            delete(Conversation).where(Conversation.id.in_(conversation_ids))
+        )
+
+    session.execute(delete(TaskSkill).where(TaskSkill.task_id == task_id))
+    session.execute(
+        delete(TaskFileOverride).where(TaskFileOverride.task_id == task_id)
+    )
+
+    temporary_files = list(
+        session.scalars(
+            select(File).where(File.owner_task_id == task_id)
+        )
+    )
+    storage_keys = [item.storage_key for item in temporary_files]
+    for file_row in temporary_files:
+        session.delete(file_row)
+
+    session.delete(task)
+    session.commit()
+
+    # Storage is best-effort after the DB transaction; orphaned bytes are
+    # harmless and can be cleaned up separately.
+    storage = get_storage()
+    for key in storage_keys:
+        try:
+            storage.purge(key)
+        except Exception:  # noqa: BLE001 - cleanup must not fail the request
+            pass

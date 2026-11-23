@@ -3,15 +3,20 @@
 Chat is not an Execution: we do not run the full pipeline, but the model must
 be able to see the Task's available files (project-inherited / extra) and the
 selected Skill's reference assets instead of claiming it cannot read them.
-Content is bounded by a chat budget and by a per-file character cap; the full
-text remains available via tools.
+Content is bounded by a chat budget and by a per-file byte cap; the full text
+remains available via tools.
+
+Phase 5 H1: the async entry point parses files in a worker thread so a large
+document cannot block the event loop / SSE delivery.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.modules.context import service as context_service
 from app.modules.context.builder import estimate_tokens
 from app.modules.document import service as document_service
@@ -47,13 +52,13 @@ def _read_excerpt(storage, file_row: File) -> str:
     return document_service.extract_text(file_row.file_type, data)
 
 
-def build_file_context(
+def _collect_entries(
     session: Session,
     task: Task,
     skill=None,
     extra_file_ids: list[str] | None = None,
-    budget_tokens: int = CHAT_FILE_BUDGET_TOKENS,
-) -> ChatFileContext | None:
+) -> list[tuple[File, str, str | None]]:
+    """Resolve Task files, this turn's temporary files and Skill assets."""
     response = context_service.compute_task_files(session, task)
     entries: list[tuple[File, str, str | None]] = []
     seen: set[str] = set()
@@ -87,20 +92,16 @@ def build_file_context(
 
     if skill is not None:
         try:
-            import uuid as _uuid
-
             skill_id = _uuid.UUID(str(skill.id))
             for link, file_row in skill_service.list_skill_files(session, skill_id):
                 entries.append((file_row, "skill_asset", link.path))
         except (ValueError, AttributeError, TypeError):
             pass
 
-    if not entries:
-        return None
-
     # Newest files first: the model should prefer recently updated material,
-    # and the budget is spent on the most recent documents first.
-    def _recency(item) -> str:
+    # and the budget is spent on the most recent documents first. Skill assets
+    # keep their declared order after task files.
+    def _recency(item: tuple[File, str, str | None]) -> str:
         file_row = item[0]
         stamp = getattr(file_row, "updated_at", None) or getattr(
             file_row, "created_at", None
@@ -110,7 +111,16 @@ def build_file_context(
     task_entries = [item for item in entries if item[1] != "skill_asset"]
     skill_entries = [item for item in entries if item[1] == "skill_asset"]
     task_entries.sort(key=_recency, reverse=True)
-    entries = task_entries + skill_entries
+    return task_entries + skill_entries
+
+
+def _render_context(
+    entries: list[tuple[File, str, str | None]],
+    budget_tokens: int,
+    read_text,
+) -> ChatFileContext | None:
+    if not entries:
+        return None
 
     lines: list[str] = ["## 当前 Task 可用文件与 Skill 资料"]
     lines.append(
@@ -135,7 +145,6 @@ def build_file_context(
         "以下内容受预算限制可能被截断；需要完整内容时可调用 read_task_file 工具。"
     )
 
-    storage = storage_module.get_storage()
     used_tokens = 0
     files: list[dict] = []
     for file_row, source, path in entries:
@@ -154,7 +163,7 @@ def build_file_context(
             )
             continue
         try:
-            text = _read_excerpt(storage, file_row)
+            text = read_text(file_row)
         except FileParseError as exc:
             record["status"] = "failed"
             files.append(record)
@@ -194,3 +203,66 @@ def build_file_context(
         lines.append(f"### {display}{suffix}\n{excerpt}")
 
     return ChatFileContext(text="\n\n".join(lines), files=files)
+
+
+def build_file_context(
+    session: Session,
+    task: Task,
+    skill=None,
+    extra_file_ids: list[str] | None = None,
+    budget_tokens: int = CHAT_FILE_BUDGET_TOKENS,
+) -> ChatFileContext | None:
+    """Synchronous variant (tests, non-async callers)."""
+    entries = _collect_entries(session, task, skill, extra_file_ids)
+    storage = storage_module.get_storage()
+    return _render_context(
+        entries, budget_tokens, lambda file_row: _read_excerpt(storage, file_row)
+    )
+
+
+async def _read_excerpt_async(storage, file_row: File, timeout_seconds: float) -> str:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_read_excerpt, storage, file_row),
+            timeout=timeout_seconds,
+        )
+    except TimeoutError as exc:
+        raise FileParseError(f"解析超时（超过 {timeout_seconds:g}s）") from exc
+
+
+async def build_file_context_async(
+    session: Session,
+    task: Task,
+    skill=None,
+    extra_file_ids: list[str] | None = None,
+    budget_tokens: int = CHAT_FILE_BUDGET_TOKENS,
+    timeout_seconds: float | None = None,
+) -> ChatFileContext | None:
+    """Async variant: DB work on the loop thread, parsing in a worker thread."""
+    timeout = float(
+        timeout_seconds
+        if timeout_seconds is not None
+        else get_settings().parse_timeout_seconds
+    )
+    entries = _collect_entries(session, task, skill, extra_file_ids)
+    storage = storage_module.get_storage()
+    parsed: dict[str, str | Exception] = {}
+    for file_row, _source, _path in entries:
+        if file_row.size > MAX_CHAT_FILE_BYTES:
+            continue  # render marks it skipped without reading
+        try:
+            parsed[str(file_row.id)] = await _read_excerpt_async(
+                storage, file_row, timeout
+            )
+        except Exception as exc:  # noqa: BLE001 - re-raised during render
+            parsed[str(file_row.id)] = exc
+
+    def _read(file_row: File) -> str:
+        value = parsed.get(str(file_row.id))
+        if value is None:
+            raise FileParseError("读取失败")
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    return _render_context(entries, budget_tokens, _read)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -20,6 +21,24 @@ from app.modules.model import service as model_service
 from app.modules.file.models import File
 from app.modules.skill import service as skill_service
 from app.modules.workspace.models import Workspace
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip opt-in PostgreSQL integration tests when no test database is configured.
+
+    SQLite remains the default, fast test path; ``TEST_DATABASE_URL`` turns the
+    ``postgres`` marker tests on (see ``scripts/test.ps1 -Postgres``).
+    """
+
+    if os.environ.get("TEST_DATABASE_URL", "").strip():
+        return
+
+    skip_postgres = pytest.mark.skip(
+        reason="TEST_DATABASE_URL is not set; skipping PostgreSQL integration tests"
+    )
+    for item in items:
+        if "postgres" in item.keywords:
+            item.add_marker(skip_postgres)
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Callable
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import get_settings
 from app.modules.artifact import service as artifact_service
 from app.modules.context import builder
 from app.modules.context import service as context_service
@@ -197,10 +198,17 @@ async def run_execution(
         finish_step(output_summary=f"{len(available.available)} 个可用文件")
         _check_cancel(cancel_check, execution_id)
 
-        # 2) parse documents (explicit failure, never silently skipped)
+        # 2) parse documents (explicit failure, never silently skipped).
+        # Read/parse runs in a worker thread with a timeout (Phase 5 H1) so a
+        # large PDF cannot block the event loop, API or SSE.
         start_step("parse_documents", "解析文档")
-        texts = builder.collect_file_texts(session, task)
-        texts += builder.collect_skill_asset_texts(session, skill)
+        parse_timeout = get_settings().parse_timeout_seconds
+        texts = await builder.collect_file_texts_async(
+            session, task, timeout_seconds=parse_timeout
+        )
+        texts += await builder.collect_skill_asset_texts_async(
+            session, skill, timeout_seconds=parse_timeout
+        )
         estimated = sum(builder.estimate_tokens(item.text) for item in texts)
         finish_step(output_summary=f"{len(texts)} 个文件，约 {estimated} tokens")
         _check_cancel(cancel_check, execution_id)

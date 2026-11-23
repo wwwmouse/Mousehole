@@ -8,10 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.logging import RequestIDMiddleware, configure_logging
 from app.infrastructure.database.session import dispose_engine, get_session_factory
 from app.modules.execution import repository as execution_repository
 from app.modules.skill import service as skill_service
@@ -37,7 +38,7 @@ async def lifespan(app: FastAPI):
             logger.warning("marked %s interrupted execution(s) as failed", recovered)
         scheduler.configure(
             session_factory=get_session_factory(),
-            max_concurrency=2,
+            max_concurrency=settings.max_concurrency,
         )
         await scheduler.start()
         for execution_id in pending_ids:
@@ -50,12 +51,14 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.log_level)
     app = FastAPI(
         title="mousehole API",
         version="0.1.0",
         description="Local-first AI workspace backend (MVP)",
         lifespan=lifespan,
     )
+    app.add_middleware(RequestIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -91,6 +94,22 @@ def create_app() -> FastAPI:
                 "error": {
                     "code": "database_unavailable",
                     "message": "数据库暂时不可用，请稍后重试",
+                    "details": None,
+                }
+            },
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(_: Request, exc: IntegrityError) -> JSONResponse:
+        # Foreign-key / unique conflicts are client-visible conflicts, not a
+        # "database unavailable" incident. Do not leak SQL details.
+        logger.warning("data integrity conflict: %s", exc)
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "conflict",
+                    "message": "操作与现有数据冲突（存在引用或唯一约束）",
                     "details": None,
                 }
             },

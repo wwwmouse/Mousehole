@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -37,3 +37,6 @@ class ChatRequest(BaseModel):
     skill_id: str | None = Field(default=None, max_length=100)
     # Task-scoped temporary files used ONLY for this message.
     file_ids: list[str] = Field(default_factory=list, max_length=20)
+    # Phase 5 H4: chat = no tool calls at all; work = all controlled tools are
+    # offered to the model (which decides whether to use them).
+    mode: Literal["chat", "work"] = "work"

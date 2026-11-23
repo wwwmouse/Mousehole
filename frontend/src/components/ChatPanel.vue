@@ -7,7 +7,8 @@ import LoadingState from '@/components/LoadingState.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import ModelControls from '@/components/ModelControls.vue'
 import RunProgress from '@/components/RunProgress.vue'
-import { streamTaskChat } from '@/api/chat'
+import { useChatStream } from '@/composables/useChatStream'
+import type { ChatStreamDone } from '@/api/chat'
 import {
   getArtifact,
   listSkills,
@@ -25,6 +26,16 @@ import type {
   TaskUsage,
 } from '@/api/types'
 import { useAppStore } from '@/stores/app'
+import {
+  chainDuration,
+  fileSourceLabel,
+  fileStatusHint,
+  formatElapsedSeconds,
+  messageFiles,
+  messageTools,
+  toolLabel,
+  usageLabel,
+} from '@/utils/chat'
 import { SUPPORTED_FILE_ACCEPT } from '@/utils/fileTypes'
 import { errorMessage } from '@/utils/errors'
 
@@ -49,13 +60,12 @@ const taskUsage = ref<TaskUsage | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const input = ref('')
-const sending = ref(false)
-const streamText = ref('')
-const streamError = ref<string | null>(null)
+// Phase 5 H4: per-turn tool switch. Memory-only (no persistence) so it always
+// starts enabled after a refresh.
+const mode = ref<'chat' | 'work'>('work')
 const listRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const highlightedMessageId = ref<string | null>(null)
-let controller: AbortController | null = null
 
 const menuOpen = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -65,53 +75,34 @@ const librarySkills = ref<Skill[]>([])
 const skillPickerOpen = ref(false)
 const selectedSkill = ref<Skill | null>(null)
 const selectedSkillId = computed(() => selectedSkill.value?.id ?? '')
-const toolEvents = ref<
-  { name: string; status: 'running' | 'ok' | 'error'; summary: string }[]
->([])
 const runRefreshKey = ref(0)
 const turnArtifacts = ref<Artifact[]>([])
-const thinking = ref(false)
-const elapsed = ref(0)
-let thinkingTimer: ReturnType<typeof setInterval> | null = null
 
-const TOOL_LABELS: Record<string, string> = {
-  read_task_files: '读取可用文件',
-  read_task_file: '读取文件内容',
-  save_artifact: '保存成果',
-  create_execution: '启动执行',
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-  project_inherited: '项目继承',
-  task_added: '额外引用',
-  temporary: '本轮临时',
-  skill_asset: 'Skill 资料',
-}
-
-function sourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? source
-}
-
-function messageTools(message: ChatMessage) {
-  return message.metadata?.tools ?? []
-}
-
-function messageFiles(message: ChatMessage) {
-  return message.metadata?.files ?? []
-}
-
-function chainDuration(message: ChatMessage): string {
-  const ms = message.metadata?.duration_ms
-  return ms && ms > 0 ? `${(ms / 1000).toFixed(1)}s` : ''
-}
+const {
+  sending,
+  elapsed,
+  thinking,
+  streamText,
+  toolEvents,
+  error: streamError,
+  begin: beginStream,
+  setError: setStreamError,
+  run: runStream,
+  stop: stopStream,
+  dispose: disposeStream,
+} = useChatStream({ onDone: handleStreamDone })
 
 const selectedSkillLabel = computed(() => selectedSkill.value?.name ?? '')
 
-const usageLabel = (usage: TaskUsage | null): string | null =>
-  usage?.total_tokens ? `${usage.total_tokens} tokens` : null
-
-function toolLabel(name: string): string {
-  return TOOL_LABELS[name] ?? name
+function handleStreamDone(data: ChatStreamDone): void {
+  taskUsage.value = data.task_usage as TaskUsage | null
+  if (data.executions.length) {
+    runRefreshKey.value += 1
+    app.notify('info', '已启动执行')
+  }
+  if (data.artifacts.length) {
+    void loadTurnArtifacts(data.artifacts)
+  }
 }
 
 async function scrollToBottom(): Promise<void> {
@@ -126,6 +117,12 @@ async function scrollToBottom(): Promise<void> {
     el.scrollTop = el.scrollHeight
   }, 80)
 }
+
+// Keep the in-flight assistant bubble pinned to the bottom while the stream
+// updates text / thinking state / tool events.
+watch([streamText, thinking, toolEvents], () => {
+  if (sending.value) void scrollToBottom()
+})
 
 async function scrollToMessage(messageId: string): Promise<void> {
   await nextTick()
@@ -255,27 +252,20 @@ async function send(): Promise<void> {
   const content = input.value.trim()
   if (!content || sending.value) return
   if (!props.hasModel) {
-    streamError.value =
-      '尚未配置可用模型：请先在 Settings 配置 DeepSeek API Key 或启用 Ollama。'
+    setStreamError(
+      '尚未配置可用模型：请先在 Settings 配置 DeepSeek API Key 或启用 Ollama。',
+    )
     return
   }
 
   input.value = ''
   resizeInput()
-  sending.value = true
-  streamError.value = null
-  streamText.value = ''
-  toolEvents.value = []
   turnArtifacts.value = []
-  thinking.value = false
-  elapsed.value = 0
   menuOpen.value = false
-  if (thinkingTimer) clearInterval(thinkingTimer)
-  thinkingTimer = setInterval(() => {
-    elapsed.value += 1
-  }, 1000)
+  beginStream()
 
   const attachmentIds = extraFiles.value.map((item) => item.file.id)
+  const skillId = selectedSkillId.value || undefined
   const pendingMetadata = {
     skill: selectedSkill.value
       ? { id: selectedSkill.value.id, name: selectedSkill.value.name }
@@ -304,88 +294,21 @@ async function send(): Promise<void> {
   ]
   await scrollToBottom()
 
-  controller = new AbortController()
-  let failed = false
-  try {
-    await streamTaskChat(
-      props.taskId,
-      {
-        content,
-        skill_id: selectedSkillId.value || undefined,
-        file_ids: attachmentIds.length ? attachmentIds : undefined,
-      },
-      {
-        onDelta: (text) => {
-          thinking.value = false
-          streamText.value += text
-          void scrollToBottom()
-        },
-        onThinking: () => {
-          thinking.value = true
-          void scrollToBottom()
-        },
-        onToolCall: (call) => {
-          toolEvents.value.push({
-            name: call.name,
-            status: 'running',
-            summary: '',
-          })
-          void scrollToBottom()
-        },
-        onToolResult: (result) => {
-          const item = [...toolEvents.value]
-            .reverse()
-            .find((entry) => entry.name === result.name && entry.status === 'running')
-          if (item) {
-            item.status = result.ok ? 'ok' : 'error'
-            item.summary = result.summary
-          }
-        },
-        onError: (error) => {
-          failed = true
-          streamError.value = error.message
-        },
-        onDone: (data) => {
-          thinking.value = false
-          taskUsage.value = data.task_usage as TaskUsage | null
-          if (data.executions.length) {
-            runRefreshKey.value += 1
-            app.notify('info', '已启动执行')
-          }
-          if (data.artifacts.length) {
-            void loadTurnArtifacts(data.artifacts)
-          }
-        },
-      },
-      controller.signal,
-    )
-  } catch (error) {
-    const aborted =
-      error instanceof DOMException && error.name === 'AbortError'
-    if (aborted) {
-      app.notify('info', '已停止生成')
-    } else {
-      failed = true
-      streamError.value = errorMessage(error)
-    }
-  } finally {
-    sending.value = false
-    thinking.value = false
-    if (thinkingTimer) {
-      clearInterval(thinkingTimer)
-      thinkingTimer = null
-    }
-    streamText.value = ''
-    controller = null
-    await load()
-    // 临时文件仅用于刚发送的这一轮，不再写入 Task 可用上下文。
-    extraFiles.value = []
-    if (failed) app.notify('error', '对话未完成，请查看错误信息')
-  }
+  const outcome = await runStream(props.taskId, {
+    content,
+    skill_id: skillId,
+    file_ids: attachmentIds.length ? attachmentIds : undefined,
+    mode: mode.value,
+  })
+  if (outcome === 'aborted') app.notify('info', '已停止生成')
+  await load()
+  // 临时文件仅用于刚发送的这一轮，不再写入 Task 可用上下文。
+  extraFiles.value = []
+  if (outcome === 'error') app.notify('error', '对话未完成，请查看错误信息')
 }
 
 function stop(): void {
-  controller?.abort()
+  stopStream()
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -409,6 +332,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside)
+  disposeStream()
 })
 </script>
 
@@ -512,11 +436,11 @@ onBeforeUnmount(() => {
               v-for="file in messageFiles(message)"
               :key="file.filename"
               class="chip chip--file"
-              :title="`${sourceLabel(file.source)}${file.status === 'skipped' ? '（超预算未展开）' : file.status === 'failed' ? '（读取失败）' : ''}`"
+              :title="`${fileSourceLabel(file.source)}${fileStatusHint(file.status)}`"
             >
               <AppIcon name="file" :size="11" />
               {{ file.filename }}
-              <span class="chip__hint">{{ sourceLabel(file.source) }}</span>
+              <span class="chip__hint">{{ fileSourceLabel(file.source) }}</span>
             </span>
           </div>
 
@@ -529,14 +453,14 @@ onBeforeUnmount(() => {
         <article v-if="sending" class="chat-message chat-message--assistant">
           <header class="chat-message__head">
             <span class="chat-message__role">Assistant</span>
-            <span class="chat-message__usage">{{ elapsed }}s</span>
+            <span class="chat-message__usage">{{ formatElapsedSeconds(elapsed) }}</span>
             <span class="spinner spinner--sm" aria-hidden="true" />
           </header>
           <details v-if="toolEvents.length || thinking" class="work-log" open>
             <summary class="work-log__summary">
               工作详情
               <span class="work-log__thinking">
-                {{ thinking ? '模型思考中…' : '生成中…' }} {{ elapsed }}s
+                {{ thinking ? '模型思考中…' : '生成中…' }} {{ formatElapsedSeconds(elapsed) }}
               </span>
             </summary>
             <ul v-if="toolEvents.length" class="tool-events">
@@ -659,6 +583,30 @@ onBeforeUnmount(() => {
             />
           </div>
           <div class="composer__right">
+            <div class="composer__mode" role="group" aria-label="对话模式">
+              <button
+                type="button"
+                class="composer__mode-btn"
+                :class="{ 'composer__mode-btn--active': mode === 'chat' }"
+                :aria-pressed="mode === 'chat'"
+                :disabled="sending"
+                title="对话模式：不调用工具，适合问答与讨论"
+                @click="mode = 'chat'"
+              >
+                对话
+              </button>
+              <button
+                type="button"
+                class="composer__mode-btn"
+                :class="{ 'composer__mode-btn--active': mode === 'work' }"
+                :aria-pressed="mode === 'work'"
+                :disabled="sending"
+                title="工作模式：可调用工具（读取文件 / 保存成果 / 启动执行），由模型自行判断"
+                @click="mode = 'work'"
+              >
+                工作
+              </button>
+            </div>
             <button v-if="sending" type="button" class="btn btn--ghost btn--sm" @click="stop">
               停止
             </button>
@@ -1131,6 +1079,41 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.composer__mode {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.composer__mode-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer__mode-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.composer__mode-btn--active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+}
+
+.composer__mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .composer__plus {

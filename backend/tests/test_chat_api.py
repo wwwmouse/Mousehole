@@ -239,7 +239,7 @@ def test_chat_error_does_not_fake_assistant_message(
     assert messages["task_usage"] is None
 
 
-def test_normal_chat_skips_tool_prepass_for_real_streaming(
+def test_chat_mode_skips_tool_prepass_for_real_streaming(
     client: TestClient, monkeypatch
 ) -> None:
     called = {"complete": False}
@@ -247,7 +247,7 @@ def test_normal_chat_skips_tool_prepass_for_real_streaming(
 
     async def complete(*args, **kwargs):
         called["complete"] = True
-        raise AssertionError("ordinary chat must not use the non-streaming pre-pass")
+        raise AssertionError("chat mode must not use the non-streaming pre-pass")
 
     async def stream(provider, model, messages, **kwargs):
         captured.append(messages)
@@ -260,7 +260,9 @@ def test_normal_chat_skips_tool_prepass_for_real_streaming(
 
     task_id = _create_task(client)
     with client.stream(
-        "POST", f"/api/v1/tasks/{task_id}/messages", json={"content": "你好"}
+        "POST",
+        f"/api/v1/tasks/{task_id}/messages",
+        json={"content": "你好", "mode": "chat"},
     ) as response:
         body = "".join(response.iter_text())
 
@@ -410,37 +412,6 @@ def test_chat_tool_saves_artifact_with_chat_source(
     assistant_meta = messages["messages"][-1]["metadata"]
     assert assistant_meta["tools"][0]["name"] == "save_artifact"
     assert assistant_meta["tools"][0]["ok"] is True
-
-
-def test_chat_saves_artifact_when_model_omits_tool(
-    client: TestClient, monkeypatch
-) -> None:
-    monkeypatch.setattr(model_service, "resolve_model", fake_resolve)
-
-    async def doc_stream(provider, model, messages, **kwargs):
-        yield {"type": "delta", "text": "这是文档内容。"}
-
-    monkeypatch.setattr(model_service, "stream_chat", doc_stream)
-    task_id = _create_task(client)
-
-    with client.stream(
-        "POST",
-        f"/api/v1/tasks/{task_id}/messages",
-        json={"content": "帮我写一份文档并保存为成果"},
-    ) as response:
-        body = "".join(response.iter_text())
-
-    assert "event: tool_result" in body
-    done_line = next(
-        line for line in body.splitlines() if "artifacts" in line and "message_id" in line
-    )
-    payload = json.loads(done_line.split("data: ", 1)[1])
-    assert len(payload["artifacts"]) == 1
-
-    series = client.get(f"/api/v1/tasks/{task_id}/artifact-series").json()
-    detail = client.get(f"/api/v1/artifact-series/{series[0]['id']}").json()
-    assert detail["artifacts"][0]["content"] == "这是文档内容。"
-    assert detail["artifacts"][0]["source_type"] == "chat"
 
 
 def test_chat_tool_creates_execution(client: TestClient, monkeypatch) -> None:

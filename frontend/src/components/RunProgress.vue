@@ -1,97 +1,32 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
 import { getExecution, listExecutions } from '@/api/endpoints'
-import type { Execution, ExecutionDetail } from '@/api/types'
+import {
+  executionStatusLabel,
+  useExecutionProgress,
+} from '@/composables/useExecutionProgress'
 import { formatDateTime } from '@/utils/format'
 
 const props = defineProps<{ taskId: string; refreshKey?: number }>()
 
-const detail = ref<ExecutionDetail | null>(null)
-const executions = ref<Execution[]>([])
-const loading = ref(true)
-const expanded = ref(false)
-let timer: ReturnType<typeof setInterval> | null = null
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '排队中',
-  running: '进行中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-}
+const {
+  detail,
+  executions,
+  expanded,
+  progress,
+  load,
+  select,
+  stopPolling,
+} = useExecutionProgress(
+  { listExecutions, getExecution },
+  { taskId: () => props.taskId },
+)
 
 const statusLabel = computed(() =>
-  detail.value ? (STATUS_LABELS[detail.value.status] ?? detail.value.status) : '',
+  detail.value ? executionStatusLabel(detail.value.status) : '',
 )
-const isActive = computed(() =>
-  detail.value
-    ? detail.value.status === 'pending' || detail.value.status === 'running'
-    : false,
-)
-
-function stopPolling(): void {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
-}
-
-function startPolling(): void {
-  stopPolling()
-  timer = setInterval(() => {
-    void refresh()
-  }, 2000)
-}
-
-async function refresh(): Promise<void> {
-  const current = detail.value
-  if (!current) return
-  try {
-    const next = await getExecution(current.id)
-    detail.value = next
-    if (next.status === 'completed' || next.status === 'failed' || next.status === 'cancelled') {
-      stopPolling()
-      if (next.status === 'failed') expanded.value = true
-      void listExecutions(props.taskId).then((items) => {
-        executions.value = items
-      })
-    }
-  } catch {
-    stopPolling()
-  }
-}
-
-async function selectExecution(item: Execution): Promise<void> {
-  try {
-    detail.value = await getExecution(item.id)
-    if (isActive.value) startPolling()
-    else stopPolling()
-  } catch {
-    /* ignore */
-  }
-}
-
-async function load(): Promise<void> {
-  loading.value = true
-  try {
-    const items = await listExecutions(props.taskId)
-    executions.value = items
-    if (items.length === 0) {
-      detail.value = null
-      stopPolling()
-      return
-    }
-    detail.value = await getExecution(items[0].id)
-    if (isActive.value) startPolling()
-    else stopPolling()
-  } catch {
-    detail.value = null
-  } finally {
-    loading.value = false
-  }
-}
 
 watch(
   () => props.refreshKey,
@@ -139,7 +74,11 @@ onBeforeUnmount(stopPolling)
     </button>
 
     <div v-if="expanded" class="run-progress__body">
-      <ul v-if="detail.steps.length" class="run-progress__steps">
+      <ul
+        v-if="detail.steps.length"
+        class="run-progress__steps"
+        :aria-label="`阶段进度 ${progress.completed}/${progress.total} 步`"
+      >
         <li
           v-for="step in detail.steps"
           :key="step.id"
@@ -161,11 +100,11 @@ onBeforeUnmount(stopPolling)
               type="button"
               class="run-progress__history-row"
               :class="{ 'run-progress__history-row--active': detail?.id === item.id }"
-              @click="selectExecution(item)"
+              @click="select(item)"
             >
               <span class="run-progress__dot" :class="`run-progress__dot--${item.status}`" />
               <span class="run-progress__history-status">
-                {{ STATUS_LABELS[item.status] ?? item.status }}
+                {{ executionStatusLabel(item.status) }}
               </span>
               <span v-if="item.skill_name" class="run-progress__history-skill">{{ item.skill_name }}</span>
               <span class="run-progress__history-time">{{ formatDateTime(item.created_at) }}</span>

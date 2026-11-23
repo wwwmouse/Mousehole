@@ -64,6 +64,7 @@ async def complete_chat(
     tools: list[dict] | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    thinking: bool | None = None,
 ) -> dict:
     config = provider_config.get_provider(provider)
     return await adapters.complete(
@@ -73,6 +74,7 @@ async def complete_chat(
         tools=tools,
         temperature=temperature,
         max_tokens=max_tokens,
+        thinking=thinking,
     )
 
 
