@@ -46,6 +46,12 @@ ALLOWED_EXTENSIONS: dict[str, tuple[str, str]] = {
     ".md": ("md", "text/markdown"),
     ".markdown": ("md", "text/markdown"),
     ".txt": ("txt", "text/plain"),
+    ".json": ("json", "application/json"),
+    ".yaml": ("yaml", "application/yaml"),
+    ".yml": ("yaml", "application/yaml"),
+    ".csv": ("csv", "text/csv"),
+    ".html": ("html", "text/html"),
+    ".css": ("css", "text/css"),
 }
 
 MAX_FILENAME_LENGTH = 512

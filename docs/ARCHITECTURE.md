@@ -237,7 +237,7 @@ File Module 只负责文件管理，不负责将 PDF 转换成模型可用的文
 - 文本分段。
 - 文件处理错误反馈。
 
-MVP 支持 PDF、Markdown 和 TXT。
+MVP 支持 PDF、Markdown、TXT，以及 JSON / YAML / CSV / HTML / CSS 这类可安全转为纯文本的 Skill 参考资料。
 
 该模块不负责文件元数据管理，也不直接调用模型。
 

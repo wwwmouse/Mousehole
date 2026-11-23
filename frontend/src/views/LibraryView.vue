@@ -18,12 +18,14 @@ import {
   isUnsupportedFileType,
   type ReferenceInfo,
 } from '@/utils/errors'
+import {
+  SUPPORTED_FILE_ACCEPT,
+  fileExtension,
+  isSupportedFile,
+} from '@/utils/fileTypes'
 import { fileTypeLabel, formatBytes, formatDateTime } from '@/utils/format'
 
 const app = useAppStore()
-
-const ACCEPTED_EXTENSIONS = ['pdf', 'md', 'markdown', 'txt']
-const ACCEPT_ATTR = '.pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain'
 
 const files = ref<FileItem[]>([])
 const loading = ref(true)
@@ -95,11 +97,6 @@ function pickFile(): void {
   fileInput.value?.click()
 }
 
-function fileExtension(name: string): string {
-  const index = name.lastIndexOf('.')
-  return index >= 0 ? name.slice(index + 1).toLowerCase() : ''
-}
-
 async function onFileSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -107,8 +104,12 @@ async function onFileSelected(event: Event): Promise<void> {
   if (!file) return
 
   const extension = fileExtension(file.name)
-  if (!ACCEPTED_EXTENSIONS.includes(extension)) {
-    app.notify('error', `不支持的文件类型：.${extension || '未知'}`, '仅支持 PDF / Markdown / TXT')
+  if (!isSupportedFile(file.name)) {
+    app.notify(
+      'error',
+      `不支持的文件类型：.${extension || '未知'}`,
+      '支持 PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS',
+    )
     return
   }
 
@@ -121,7 +122,10 @@ async function onFileSelected(event: Event): Promise<void> {
     await load()
   } catch (error) {
     if (isUnsupportedFileType(error)) {
-      app.notifyError(error, '后端拒绝了该文件类型（仅支持 PDF / Markdown / TXT）')
+      app.notifyError(
+        error,
+        '后端拒绝了该文件类型（支持 PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS）',
+      )
     } else {
       app.notifyError(error)
     }
@@ -230,7 +234,7 @@ onBeforeUnmount(() => {
           ref="fileInput"
           type="file"
           class="visually-hidden"
-          :accept="ACCEPT_ATTR"
+          :accept="SUPPORTED_FILE_ACCEPT"
           @change="onFileSelected"
         />
       </template>
@@ -253,6 +257,11 @@ onBeforeUnmount(() => {
         <option value="pdf">PDF</option>
         <option value="md">Markdown</option>
         <option value="txt">TXT</option>
+        <option value="json">JSON</option>
+        <option value="yaml">YAML</option>
+        <option value="csv">CSV</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
       </select>
       <select v-model="sortBy" class="select toolbar__select" aria-label="排序方式">
         <option value="updated">最近更新</option>
@@ -263,7 +272,7 @@ onBeforeUnmount(() => {
     </div>
 
     <p class="upload-note">
-      支持 PDF / Markdown（.md、.markdown）/ TXT；其他格式会被明确拒绝，不会静默忽略。
+      支持 PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS；其他格式会被明确拒绝，不会静默忽略。
       <span v-if="uploading && uploadName" class="upload-note__active">正在上传：{{ uploadName }}</span>
     </p>
 
@@ -282,7 +291,7 @@ onBeforeUnmount(() => {
       v-else-if="visibleFiles.length === 0 && !hasFilters"
       icon="library"
       title="Library 还没有文件"
-      description="上传 PDF、Markdown 或 TXT 文件，之后可在 Project 和 Task 中引用它们。"
+      description="上传文档、结构化数据或设计文本，之后可在 Project 和 Task 中引用它们。"
     >
       <button type="button" class="btn btn--primary" :disabled="uploading" @click="pickFile">
         <AppIcon name="upload" :size="16" />

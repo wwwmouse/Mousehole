@@ -10,7 +10,7 @@ from app.modules.file.models import File
 from app.modules.skill import registry as builtin_registry
 from app.modules.skill.models import Skill, SkillFile, TaskSkill
 from app.modules.task.models import Task
-from app.shared.exceptions import ConflictError, NotFoundError, UnprocessableError
+from app.shared.exceptions import ConflictError, NotFoundError
 
 BUILTIN_IDS: dict[str, uuid.UUID] = {
     "multi_doc_analysis": uuid.UUID("11111111-1111-4111-8111-111111111111"),
@@ -23,10 +23,7 @@ PROMPT_BASE = """## 任务
 {description}
 
 ## 资料
-{context}
-
-## 输出要求
-{instruction}"""
+{context}"""
 
 
 @dataclass(frozen=True)
@@ -160,8 +157,10 @@ def render_messages(
         title=task.title,
         description=description,
         context=context_text,
-        instruction=skill.instruction,
     )
+    instruction = skill.instruction.strip()
+    if instruction:
+        user_content += "\n\n## 输出要求\n" + instruction
     return [
         {"role": "system", "content": skill.system_prompt},
         {"role": "user", "content": user_content},
@@ -208,8 +207,6 @@ def update_skill(
     if description is not None:
         skill.description = description
     if instruction is not None:
-        if not instruction.strip():
-            raise UnprocessableError("Skill 指令不能为空")
         skill.instruction = instruction
     if system_prompt is not None:
         skill.system_prompt = system_prompt

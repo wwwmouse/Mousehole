@@ -5,13 +5,30 @@ from __future__ import annotations
 from app.modules.document.parsers import parse_markdown, parse_pdf, parse_text
 from app.shared.exceptions import FileParseError
 
-SUPPORTED_FILE_TYPES = ("pdf", "md", "markdown", "txt")
+SUPPORTED_FILE_TYPES = (
+    "pdf",
+    "md",
+    "markdown",
+    "txt",
+    "json",
+    "yaml",
+    "csv",
+    "html",
+    "css",
+)
 
 _PARSERS = {
     "pdf": parse_pdf,
     "md": parse_markdown,
     "markdown": parse_markdown,
     "txt": parse_text,
+    # Structured / design reference formats are read as plain text. They are
+    # never executed or rendered by the backend.
+    "json": parse_text,
+    "yaml": parse_text,
+    "csv": parse_text,
+    "html": parse_text,
+    "css": parse_text,
 }
 
 

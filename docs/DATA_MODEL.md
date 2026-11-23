@@ -687,7 +687,7 @@ Execution 应分别记录开始时间和完成时间，便于后续统计执行�
 
 1. 用户进入 Workspace。
 2. 创建 Project。
-3. 上传 PDF、Markdown 或 TXT 文件。
+3. 上传 PDF、Markdown、TXT，以及 JSON / YAML / CSV / HTML / CSS 文本资料。
 4. File 进入 Global Library。
 5. 创建 ProjectFile 关联。
 6. Project 获得该文件的可用上下文。

@@ -58,7 +58,7 @@ PostgreSQL + storage/ + data/
 | modules/project | Project CRUD、归档、项目文件关联 | service.py、repository.py |
 | modules/task | Task CRUD、绑定 Project、删除清理 | service.py |
 | modules/file | 上传、哈希、存储、Library、引用、临时文件 | service.py、storage.py、models.py |
-| modules/document | PDF/Markdown/TXT 解析，失败显式抛错 | parsers.py、service.py |
+| modules/document | PDF/Markdown/TXT/JSON/YAML/CSV/HTML/CSS 文本提取，失败显式抛错 | parsers.py、service.py |
 | modules/context | Task 可用文件计算；执行上下文预算/摘要 | service.py、builder.py |
 | modules/conversation | 消息、SSE、Chat 上下文、受控工具 | chat_context.py、tools.py、service.py |
 | modules/model | Provider 配置、模型解析、流式/非流式调用 | adapters.py、service.py、config.py |
@@ -84,7 +84,7 @@ PostgreSQL + storage/ + data/
 
 | 目录 | 内容 |
 |---|---|
-| backend/tests | 104 个 pytest |
+| backend/tests | 107 个 pytest |
 | docs | 产品、数据、架构、UI、决策、计划 |
 | scripts | backup.ps1、restore.ps1 |
 | storage、data、backups | 文件、Provider 配置、备份 |
@@ -131,7 +131,7 @@ PostgreSQL + storage/ + data/
 | 流式交互 | SSE thinking/tool_call/tool_result/delta/done/error | chat.py、chat.ts、ChatPanel.vue | test_chat_api.py、E2E |
 | 失败处理 | 统一异常、失败步骤、错误码，不伪装成功 | shared/exceptions.py、execution/service.py | 多个 pytest |
 | 安全边界 | 只操作当前 Task，无 Shell/任意文件系统 | tools.py、providers.py | test_provider_config.py |
-| 评估验收 | 104 pytest、Playwright E2E、备份恢复 | backend/tests、frontend/e2e、scripts | 可现场运行 |
+| 评估验收 | 107 pytest、Playwright E2E、备份恢复 | backend/tests、frontend/e2e、scripts | 可现场运行 |
 
 ### 4.1 Agent 开发关键步骤 → 对应文件夹
 

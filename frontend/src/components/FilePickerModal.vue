@@ -133,7 +133,7 @@ function onClose(): void {
           v-else-if="visibleFiles.length === 0"
           icon="file"
           :title="search ? '没有匹配的文件' : 'Library 中还没有文件'"
-          :description="search ? '尝试其他关键词，或先在 Library 上传文件。' : '请先在 Library 上传 PDF / Markdown / TXT 文件。'"
+          :description="search ? '尝试其他关键词，或先在 Library 上传文件。' : '请先在 Library 上传文档、结构化数据或设计文本文件。'"
           compact
         />
         <ul v-else class="file-rows">

@@ -78,9 +78,16 @@ const taskStatusLabels: Record<string, string> = {
 
 const fileTypeLabels: Record<string, string> = {
   pdf: 'PDF',
+  md: 'Markdown',
   markdown: 'Markdown',
   text: 'TXT',
   txt: 'TXT',
+  json: 'JSON',
+  yaml: 'YAML',
+  yml: 'YAML',
+  csv: 'CSV',
+  html: 'HTML',
+  css: 'CSS',
 }
 
 export function projectStatusLabel(status: string): string {

@@ -553,7 +553,7 @@ MVP 暂不要求：
 ### 15.3 Library
 
 - 文件名搜索（防抖）；
-- 类型筛选：全部 / PDF / Markdown / TXT；
+- 类型筛选：全部 / PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS；
 - 基础排序：最近更新 / 文件名 / 文件大小；
 - 删除仍先检查引用，引用中存在时返回 409。
 
@@ -602,7 +602,8 @@ MVP 暂不要求：
 - 左侧导航包含 **Home / All Tasks / Projects / Library / Skills / Settings**；
 - All Tasks 是跨 Project 的任务索引，按 Global Workspace / Project 分组，Project 支持置顶与三点菜单（置顶 / 查看详情 / 删除）；
 - Task 页面左侧提供 Project → Task 快速切换树，显示最近对话时间；
-- Skill Library 支持新增、编辑、删除，编辑弹窗内可上传文件/文件夹作为 Skill 资料。
+- Skill Library 支持新增、编辑、删除；名称必填，描述、指令 / 输出要求、System Prompt 均可选；
+- 新建 Skill 时即可上传文件/文件夹，保存时统一上传并关联；文件夹导入会跳过不支持的文件并明确提示。
 
 ### 14.2 Task Chat
 

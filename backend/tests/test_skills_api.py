@@ -51,6 +51,47 @@ def test_create_update_and_delete_skill(client: TestClient) -> None:
     assert skill["id"] not in remaining
 
 
+def test_skill_instruction_is_optional(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/skills",
+        json={
+            "name": "纯资料 Skill",
+            "description": "只提供参考资料，不规定输出结构。",
+        },
+    )
+    assert created.status_code == 201, created.text
+    skill = created.json()
+    assert skill["instruction"] == ""
+
+    # Empty instruction remains valid when editing.
+    updated = client.patch(
+        f"/api/v1/skills/{skill['id']}",
+        json={"instruction": ""},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["instruction"] == ""
+
+    assert client.delete(f"/api/v1/skills/{skill['id']}").status_code == 204
+
+
+def test_skill_without_instruction_omits_output_section() -> None:
+    from types import SimpleNamespace
+
+    from app.modules.skill.service import ResolvedSkill, render_messages
+
+    skill = ResolvedSkill(
+        id="test",
+        name="纯资料",
+        system_prompt="",
+        instruction="",
+        output_type="text/markdown",
+    )
+    task = SimpleNamespace(title="任务", description=None)
+    messages = render_messages(skill, task, "资料正文")
+    assert "## 输出要求" not in messages[-1]["content"]
+    assert "## 资料" in messages[-1]["content"]
+
+
 def test_task_skill_reference_flow(client: TestClient) -> None:
     task_id = _create_task(client)
     skills = client.get("/api/v1/skills").json()

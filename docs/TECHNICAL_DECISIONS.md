@@ -685,7 +685,7 @@ Agent 必须遵守已经批准的产品规格、数据模型、技术决策和�
 - Python + FastAPI 后端。
 - PostgreSQL 数据库。
 - 本地文件存储。
-- PDF、Markdown、TXT 文件处理。
+- PDF、Markdown、TXT，以及 JSON / YAML / CSV / HTML / CSS 文本资料处理。
 - OpenAI、DeepSeek、Ollama Provider 接入。
 - Task 模型选择。
 - Application Settings 中的 Provider 配置与密钥管理。

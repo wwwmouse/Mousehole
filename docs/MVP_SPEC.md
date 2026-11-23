@@ -70,7 +70,7 @@ MVP 必须建立以下核心能力：
 典型流程：
 
 1. 用户创建一个 Project，例如 `Agent Learning`。
-2. 用户上传多份 PDF、Markdown 或 TXT 文件。
+2. 用户上传多份文档或文本资料（PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS）。
 3. 用户创建 Task，例如「分析这些资料中的 Agent 架构，并整理核心概念」。
 4. 用户将多份资料关联到该 Task。
 5. mousehole 读取和处理资料，组织 AI 上下文。
@@ -502,7 +502,7 @@ MVP 不是以页面数量或代码规模验收，而是以端到端工作闭环�
 
 ### 8.2 文件管理
 
-- [ ] 用户可以上传 PDF、Markdown 和 TXT 文件。
+- [ ] 用户可以上传 PDF、Markdown、TXT，以及 JSON / YAML / CSV / HTML / CSS 文本资料。
 - [ ] 用户可以查看文件列表和基本信息。
 - [ ] 系统能够正确解析支持的文件。
 - [ ] 不支持的格式能够给出明确错误。

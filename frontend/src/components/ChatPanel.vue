@@ -25,6 +25,7 @@ import type {
   TaskUsage,
 } from '@/api/types'
 import { useAppStore } from '@/stores/app'
+import { SUPPORTED_FILE_ACCEPT } from '@/utils/fileTypes'
 import { errorMessage } from '@/utils/errors'
 
 const props = defineProps<{
@@ -646,7 +647,7 @@ onBeforeUnmount(() => {
               ref="fileInput"
               class="hidden-input"
               type="file"
-              accept=".pdf,.md,.markdown,.txt"
+              :accept="SUPPORTED_FILE_ACCEPT"
               @change="onFileSelected"
             />
             <span v-if="uploading" class="composer__hint">上传中…</span>

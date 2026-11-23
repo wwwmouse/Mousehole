@@ -20,6 +20,7 @@ import {
 import type { Skill, SkillFileInfo } from '@/api/types'
 import { useAppStore } from '@/stores/app'
 import { errorMessage } from '@/utils/errors'
+import { SUPPORTED_FILE_ACCEPT, isSupportedFile } from '@/utils/fileTypes'
 import { formatDateTime } from '@/utils/format'
 
 const app = useAppStore()
@@ -49,6 +50,12 @@ const assetUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const folderInput = ref<HTMLInputElement | null>(null)
 
+function skippedFilesMessage(files: File[]): string {
+  const names = files.slice(0, 4).map((file) => file.name)
+  const suffix = files.length > 4 ? ' 等 ' + files.length + ' 个文件' : ''
+  return '已跳过不支持的文件：' + names.join('、') + suffix
+}
+
 async function loadAttachments(skillId: string): Promise<void> {
   try {
     attachments.value = await listSkillFiles(skillId)
@@ -63,7 +70,18 @@ async function onAssetSelected(event: Event, withPath: boolean): Promise<void> {
   inputEl.value = ''
   if (files.length === 0) return
 
-  const selected = files.map((file) => ({
+  const supportedFiles = files.filter((file) => isSupportedFile(file.name))
+  const skippedFiles = files.filter((file) => !isSupportedFile(file.name))
+  if (skippedFiles.length) {
+    app.notify(
+      'info',
+      skippedFilesMessage(skippedFiles),
+      '支持 PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS；其余文件不会上传。',
+    )
+  }
+  if (supportedFiles.length === 0) return
+
+  const selected = supportedFiles.map((file) => ({
     file,
     path: withPath
       ? (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
@@ -163,8 +181,8 @@ function discardChanges(): void {
 async function submit(): Promise<void> {
   const name = form.value.name.trim()
   const instruction = form.value.instruction.trim()
-  if (!name || !instruction) {
-    app.notify('error', '名称与指令不能为空')
+  if (!name) {
+    app.notify('error', 'Skill 名称不能为空')
     return
   }
   saving.value = true
@@ -283,7 +301,7 @@ onMounted(() => {
         </header>
         <button type="button" class="skill-card__content" @click="openEdit(skill)">
           <span class="skill-card__desc">{{ skill.description || '（无描述）' }}</span>
-          <span class="skill-card__instruction">{{ skill.instruction }}</span>
+          <span v-if="skill.instruction" class="skill-card__instruction">{{ skill.instruction }}</span>
         </button>
         <p class="skill-card__meta">更新于 {{ formatDateTime(skill.updated_at) }}</p>
       </li>
@@ -292,29 +310,62 @@ onMounted(() => {
     <Modal
       :open="modalOpen"
       :title="editing ? '编辑 Skill' : '添加 Skill'"
-      width="560px"
+      width="620px"
       :dismissible="!saving"
       @close="requestClose"
     >
       <div class="form-stack">
+        <p class="skill-form__intro">
+          Skill 是给 Agent 使用的可复用能力单元：它把一段指令、输入说明和输出要求封装成一个可发现、可调用、可编排的“能力包”，让 Agent 在特定场景下稳定完成某类任务。
+        </p>
         <label class="field">
-          <span class="field__label">名称</span>
-          <input v-model="form.name" class="input" type="text" maxlength="100" />
+          <span class="field__label-row">
+            <span class="field__label">名称 <span class="required">*</span></span>
+          </span>
+          <input
+            v-model="form.name"
+            class="input"
+            type="text"
+            maxlength="100"
+            placeholder="例如：视觉设计评审"
+          />
         </label>
         <label class="field">
-          <span class="field__label">描述</span>
-          <input v-model="form.description" class="input" type="text" maxlength="500" />
+          <span class="field__label-row">
+            <span class="field__label">描述</span>
+          </span>
+          <textarea
+            v-model="form.description"
+            class="textarea"
+            rows="3"
+            maxlength="2000"
+            placeholder="一个用于【任务】的 Skill，可根据【输入】产出【输出】，适用于【场景】"
+          />
         </label>
         <label class="field">
-          <span class="field__label">指令 / 输出要求</span>
-          <textarea v-model="form.instruction" class="textarea" rows="5" />
+          <span class="field__label-row">
+            <span class="field__label">指令 / 输出要求</span>
+          </span>
+          <textarea
+            v-model="form.instruction"
+            class="textarea"
+            rows="4"
+            placeholder="指令：告诉 Skill 以什么角色、按什么步骤和约束去完成任务。&#10;&#10;输出要求：告诉 Skill 最终要产出什么内容、什么格式、边界和异常情况怎么输出"
+          />
         </label>
         <label class="field">
-          <span class="field__label">System Prompt（可选）</span>
-          <textarea v-model="form.system_prompt" class="textarea" rows="3" />
+          <span class="field__label-row">
+            <span class="field__label">System Prompt</span>
+          </span>
+          <textarea
+            v-model="form.system_prompt"
+            class="textarea"
+            rows="3"
+            placeholder="设定该 Skill 的系统级角色、行为边界和全局约束，优先级高于用户输入和普通指令"
+          />
         </label>
 
-        <div class="field">
+        <div class="field skill-assets">
           <div class="skill-assets__head">
             <span class="field__label">资料文件 / 文件夹</span>
             <div class="skill-assets__actions">
@@ -373,14 +424,15 @@ onMounted(() => {
               </button>
             </li>
           </ul>
-          <p v-else-if="editing" class="skill-assets__hint">还没有资料文件；可上传模板、参考资料或整个文件夹。</p>
-          <p v-else class="skill-assets__hint">可直接选择文件或文件夹，保存 Skill 时自动上传并关联。</p>
+          <p class="skill-assets__formats">
+            支持文档、结构化数据与设计文本：PDF / Markdown / TXT / JSON / YAML / CSV / HTML / CSS。
+          </p>
           <input
             ref="fileInput"
             class="hidden-input"
             type="file"
             multiple
-            accept=".pdf,.md,.markdown,.txt"
+            :accept="SUPPORTED_FILE_ACCEPT"
             @change="onAssetSelected($event, false)"
           />
           <input
@@ -594,7 +646,46 @@ onMounted(() => {
 .form-stack {
   display: flex;
   flex-direction: column;
+  gap: 14px;
+}
+
+.skill-form__intro {
+  margin: 0 0 2px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.field__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 6px;
+}
+
+.field__label-row .field__label {
+  margin: 0;
+}
+
+.required {
+  color: var(--accent);
+}
+
+.skill-assets {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.skill-assets__formats {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .skill-assets__head {
@@ -608,12 +699,6 @@ onMounted(() => {
 .skill-assets__actions {
   display: flex;
   gap: 4px;
-}
-
-.skill-assets__hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-faint);
 }
 
 .skill-assets__list {

@@ -1,4 +1,5 @@
-"""Document parsers for the MVP file types: PDF, Markdown and TXT.
+"""Document parsers for supported reference formats (PDF/Markdown/TXT plus
+JSON/YAML/CSV/HTML/CSS text assets).
 
 Parsers are intentionally small and side-effect free. They receive raw bytes and
 return cleaned text; they never touch the database or storage layer.

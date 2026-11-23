@@ -23,14 +23,14 @@ class SkillRead(BaseModel):
 
 class SkillCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    description: str | None = Field(default=None, max_length=500)
-    instruction: str = Field(min_length=1)
+    description: str | None = Field(default=None, max_length=2000)
+    instruction: str = ""
     system_prompt: str | None = None
 
 
 class SkillUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
     instruction: str | None = None
     system_prompt: str | None = None
 

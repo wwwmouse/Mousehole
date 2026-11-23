@@ -74,6 +74,26 @@ def test_upload_query_and_content(client: TestClient) -> None:
     assert missing.json()["error"]["code"] == "not_found"
 
 
+def test_upload_structured_and_design_text_formats(client: TestClient) -> None:
+    cases = [
+        ("metadata.json", b'{"name":"skill","version":1}', "json", "application/json"),
+        ("config.yaml", b"name: skill\nversion: 1\n", "yaml", "application/yaml"),
+        ("config.yml", b"name: skill\n", "yaml", "application/yaml"),
+        ("table.csv", b"name,value\na,1\n", "csv", "text/csv"),
+        ("page.html", b"<h1>Hello</h1>", "html", "text/html"),
+        ("style.css", b"h1 { color: red; }", "css", "text/css"),
+    ]
+    for filename, data, file_type, mime_type in cases:
+        created = upload(client, filename, data)
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["file_type"] == file_type
+        assert body["mime_type"] == mime_type
+        content = client.get(f"/api/v1/files/{body['id']}/content")
+        assert content.status_code == 200, content.text
+        assert content.json()["text"]
+
+
 def test_upload_rejects_unsupported_empty_and_oversized(
     client: TestClient, monkeypatch
 ) -> None:
