@@ -3,9 +3,11 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.core.config import get_settings
 from app.modules.file import repository as file_repository
+from app.modules.file import service as file_service
 from app.modules.file.schemas import FileRead
 from app.modules.project import repository
 from app.modules.project.models import Project
@@ -109,6 +111,7 @@ def delete_project(session: Session, project_id: uuid.UUID) -> None:
         )
     repository.delete(session, project)
     session.commit()
+    file_service.cleanup_project_private_files(session, project_id)
 
 
 def list_project_files(session: Session, project_id: uuid.UUID) -> list[ProjectFileRead]:
@@ -143,6 +146,29 @@ def add_project_file(
     )
 
 
+def upload_project_file(
+    session: Session, project_id: uuid.UUID, upload: UploadFile
+) -> ProjectFileRead:
+    """上传项目私有文件：不进入 Global Library，默认给项目内 Task 使用。"""
+    project = get_project(session, project_id)
+    file = file_service.upload_file(
+        session,
+        upload,
+        is_temporary=True,
+        owner_project_id=project.id,
+    )
+    link = repository.get_project_file(session, project.id, file.id)
+    if link is None:
+        link = repository.add_file(session, project.id, file.id)
+        session.commit()
+        session.refresh(link)
+    return ProjectFileRead(
+        file=file,
+        added_at=link.added_at,
+        source="project",
+    )
+
+
 def remove_project_file(
     session: Session, project_id: uuid.UUID, file_id: uuid.UUID
 ) -> None:
@@ -155,3 +181,4 @@ def remove_project_file(
         )
     repository.remove_file(session, link)
     session.commit()
+    file_service.cleanup_project_private_file(session, project_id, file_id)

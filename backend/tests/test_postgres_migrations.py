@@ -625,6 +625,7 @@ REQUIRED_COLUMNS = {
         "status",
         "is_temporary",
         "owner_task_id",
+        "owner_project_id",
     },
     "project_files": {"id", "project_id", "file_id", "added_at"},
     "task_file_overrides": {"id", "task_id", "file_id", "action", "created_at"},

@@ -93,6 +93,18 @@ export function addProjectFile(projectId: string, fileId: string): Promise<Proje
   })
 }
 
+export function uploadProjectFile(
+  projectId: string,
+  file: File,
+): Promise<ProjectFile> {
+  const form = new FormData()
+  form.append('file', file)
+  return request<ProjectFile>(
+    `/projects/${encodeURIComponent(projectId)}/files/upload`,
+    { method: 'POST', form },
+  )
+}
+
 export function removeProjectFile(projectId: string, fileId: string): Promise<void> {
   return request<void>(
     `/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}`,

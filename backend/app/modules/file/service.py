@@ -108,6 +108,7 @@ def upload_file(
     *,
     is_temporary: bool = False,
     owner_task_id: uuid.UUID | None = None,
+    owner_project_id: uuid.UUID | None = None,
 ) -> FileRead:
     filename = _safe_filename(upload.filename)
     file_type, mime_type = _file_type_for(filename, upload.filename)
@@ -129,9 +130,8 @@ def upload_file(
 
     storage_key, content_hash, size = get_storage().save(data, _extension_of(filename))
 
-    # Content-addressed storage can yield the same key for an identical upload.
-    # storage_key is unique in the database, so re-uploading identical content
-    # reuses (or restores) the existing File row instead of failing.
+    # 内容寻址存储可能产生相同 storage_key；storage_key 在数据库中唯一，
+    # 因此重复上传相同内容时复用（或恢复）已有 File，而不是报冲突。
     existing = repository.get_by_storage_key(session, storage_key)
     if existing is not None:
         changed = False
@@ -143,12 +143,31 @@ def upload_file(
             existing.size = size
             existing.content_hash = content_hash
             changed = True
-        # The same bytes already exist in the Global Library: reuse that row
-        # instead of creating a hidden duplicate.
-        if not is_temporary and existing.is_temporary:
-            existing.is_temporary = False
-            existing.owner_task_id = None
-            changed = True
+        if not is_temporary:
+            # 上传到 Library：如果已有私有文件，复用并提升为全局文件。
+            if existing.is_temporary:
+                existing.is_temporary = False
+                existing.owner_task_id = None
+                existing.owner_project_id = None
+                changed = True
+        else:
+            same_task = (
+                owner_task_id is not None
+                and existing.is_temporary
+                and existing.owner_task_id == owner_task_id
+            )
+            same_project = (
+                owner_project_id is not None
+                and existing.is_temporary
+                and existing.owner_project_id == owner_project_id
+            )
+            if existing.is_temporary and not (same_task or same_project):
+                # 相同内容已属于另一个私有范围；提升为全局，避免跨项目共享
+                # 一个隐藏文件，也避免 storage_key 冲突。
+                existing.is_temporary = False
+                existing.owner_task_id = None
+                existing.owner_project_id = None
+                changed = True
         if changed:
             session.commit()
             session.refresh(existing)
@@ -164,6 +183,7 @@ def upload_file(
         content_hash=content_hash,
         is_temporary=is_temporary,
         owner_task_id=owner_task_id if is_temporary else None,
+        owner_project_id=owner_project_id if is_temporary else None,
     )
     session.commit()
     session.refresh(file)
@@ -215,9 +235,10 @@ def create_global_text_file(
             existing.content_hash = content_hash
             changed = True
         if existing.is_temporary:
-            # An exported artifact must be visible in the Global Library.
+            # 导出的成果必须进入 Global Library，解除私有归属。
             existing.is_temporary = False
             existing.owner_task_id = None
+            existing.owner_project_id = None
             changed = True
         if changed:
             session.commit()
@@ -486,3 +507,55 @@ def cleanup_task_temporary_files(session: Session, task_id: uuid.UUID) -> None:
     )
     for file_id in file_ids:
         _discard_temporary_file_if_unused(session, task_id, file_id)
+
+
+def _discard_project_private_file_if_unused(
+    session: Session, project_id: uuid.UUID, file_id: uuid.UUID
+) -> None:
+    """删除无引用的项目私有文件；历史快照仍引用时保留。"""
+    from sqlalchemy.exc import IntegrityError
+
+    file_row = repository.get(session, file_id)
+    if (
+        file_row is None
+        or not file_row.is_temporary
+        or file_row.owner_project_id != project_id
+    ):
+        return
+    project_refs, task_refs = repository.count_references(session, file_id)
+    if project_refs or task_refs:
+        return
+    storage_key = file_row.storage_key
+    try:
+        session.delete(file_row)
+        session.commit()
+    except IntegrityError:
+        # 历史 Execution 快照仍引用该文件，保留。
+        session.rollback()
+        return
+    try:
+        get_storage().purge(storage_key)
+    except Exception:  # noqa: BLE001 - 清理失败不应破坏 API 调用
+        pass
+
+
+def cleanup_project_private_file(
+    session: Session, project_id: uuid.UUID, file_id: uuid.UUID
+) -> None:
+    """对外公开：项目文件解除关联后清理私有文件。"""
+    _discard_project_private_file_if_unused(session, project_id, file_id)
+
+
+def cleanup_project_private_files(session: Session, project_id: uuid.UUID) -> None:
+    """删除项目时清理该项目所有无引用的私有文件（best effort）。"""
+    from app.modules.file.models import File
+
+    file_ids = list(
+        session.scalars(
+            select(File.id).where(
+                File.owner_project_id == project_id, File.is_temporary.is_(True)
+            )
+        )
+    )
+    for file_id in file_ids:
+        _discard_project_private_file_if_unused(session, project_id, file_id)

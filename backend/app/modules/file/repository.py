@@ -90,6 +90,7 @@ def create(
     content_hash: str,
     is_temporary: bool = False,
     owner_task_id: uuid.UUID | None = None,
+    owner_project_id: uuid.UUID | None = None,
 ) -> File:
     file = File(
         filename=filename,
@@ -100,6 +101,7 @@ def create(
         content_hash=content_hash,
         is_temporary=is_temporary,
         owner_task_id=owner_task_id,
+        owner_project_id=owner_project_id,
     )
     session.add(file)
     session.flush()

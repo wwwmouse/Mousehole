@@ -17,6 +17,7 @@ class FileRead(BaseModel):
     content_hash: str
     status: str
     is_temporary: bool = False
+    owner_project_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 

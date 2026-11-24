@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Response, UploadFile, status
 
 from app.api.deps import DbSession
 from app.modules.project import service
@@ -62,6 +62,18 @@ def list_project_files(
     project_id: uuid.UUID, db: DbSession
 ) -> list[ProjectFileRead]:
     return service.list_project_files(db, project_id)
+
+
+@router.post(
+    "/{project_id}/files/upload",
+    response_model=ProjectFileRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_project_file(
+    project_id: uuid.UUID, db: DbSession, file: UploadFile
+) -> ProjectFileRead:
+    """上传项目私有文件：只在项目内可见，不进入 Global Library。"""
+    return service.upload_project_file(db, project_id, file)
 
 
 @router.post(

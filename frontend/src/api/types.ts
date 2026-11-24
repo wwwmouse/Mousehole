@@ -62,6 +62,8 @@ export interface FileItem {
   size: number
   content_hash: string
   status: FileStatus
+  is_temporary?: boolean
+  owner_project_id?: string | null
   created_at: string
   updated_at: string
 }

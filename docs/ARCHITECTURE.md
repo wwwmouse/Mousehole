@@ -103,10 +103,11 @@ API 层：`app/api/v1/` 下按资源拆分（workspaces、projects、tasks、tas
 ### 4.3 上下文构建
 
 - 可用文件 = Project 继承文件 ∪ Task 额外引用 − Task 排除；临时文件仅在当前一轮 Chat 生效。
+- **项目私有文件**：`files.is_temporary=true + owner_project_id`；不出现在 Global Library，但属于项目文件，项目内 Task 默认继承；移除项目引用或删除项目时，无引用/无快照的私有文件会被清理。
 - 预算按模型窗口推导（扣除输出与开销预留），未知模型回退 32k；Workspace 可覆盖。
 - 超预算：分批 + 每批摘要 + 汇总；只对实际参与的文件写快照，并标注 `direct` / `summarized`。
 - Chat 默认读取全文（≤2MB/文件），总预算默认 64k；超预算才截断并提示用 `read_task_file` 分页。
-- Chat 历史按 `context_start_sequence` 截取：清空只把旧消息排除出下一次请求，不删除历史；恢复把边界置空，并按 `CHAT_HISTORY_LIMIT`（默认 40 条消息）取最近记录。
+- Chat 历史按 `context_start_sequence` 截取：清空只把旧消息排除出下一次请求，不删除历史；恢复把边界置空，并按 `CHAT_HISTORY_LIMIT`（默认 80 条消息）取最近记录。
 
 ### 4.4 模型接入
 
@@ -174,6 +175,7 @@ pending ──► running ──► completed
 - **聊天上下文边界**：`conversations.context_start_sequence` + `PATCH /api/v1/tasks/{id}/messages/context`；清空/恢复不删除 Message，只改变送入模型的历史。
 - **流程沉淀 Skill**：内置 `skill_design`，固定输出四段式 Markdown 技能卡；仍由用户复制到新建 Skill，暂未增加 `save_skill` 工具。
 - **工程硬化**：解析线程池 + 超时、日志脱敏与 request-id、Postgres 迁移测试、对话/工作模式、配置化、前端单测。
+- **项目私有文件（交付后补充）**：`POST /api/v1/projects/{id}/files/upload`；`files.owner_project_id` 标记项目私有，上传不进入 Global Library，Task 继承规则不变，移除/删除项目时按引用清理。
 - **未实现（后置）**：Task 引用 Artifact、`context_manifest`、全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、PromptTemplate、`save_skill`。
 
 边界：不引入 RAG/向量库/embedding、消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
@@ -188,8 +190,8 @@ pending ──► running ──► completed
 | `backend/app/modules/` | 12 个业务模块（见 §3） |
 | `backend/app/core/`、`shared/` | 配置、异常、枚举、usage、默认值 |
 | `backend/app/infrastructure/` | SQLAlchemy Base/Session |
-| `backend/alembic/versions/` | 迁移（当前 head `o5p6q7r8s9t0`） |
-| `backend/tests/` | 132 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
+| `backend/alembic/versions/` | 迁移（当前 head `p6q7r8s9t0u1`） |
+| `backend/tests/` | 134 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
 | `frontend/src/views/` | 页面（TaskView 已拆出 composable，仍偏大） |
 | `frontend/src/components/` | ChatPanel、RunProgress、TaskArtifacts、FilePreviewModal 等 |
 | `frontend/e2e/` | Playwright 核心闭环（Mock API） |

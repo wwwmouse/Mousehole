@@ -17,7 +17,7 @@
 | Home | `/` | 问候语、日期、7 天统计、最近 Projects/Tasks/Artifacts、新建任务入口 |
 | All Tasks | `/tasks` | 跨 Project 任务索引，按 Global/Project 分组、置顶、筛选、三点菜单 |
 | Projects | `/projects` | 项目账本式列表（Ledger）、归档 |
-| Project Detail | `/projects/:id` | Overview（数量 + 最近活动）、Tasks / Files / Artifacts 三个 Tab |
+| Project Detail | `/projects/:id` | Overview（数量 + 最近活动）、Tasks / Files / Artifacts 三个 Tab；Files 支持本地上传（项目私有）与从 Library 添加 |
 | Task | `/tasks/:id` | Chat / Settings / Artifacts 三个平级 Tab；左侧 Project → Task 快速切换树 |
 | Library | `/library` | 全局文件：上传、文件名搜索、类型筛选、排序、预览、删除 |
 | Skills | `/skills` | 全局 Skill 库：增删改查、文件/文件夹资料 |
@@ -72,7 +72,7 @@
 - 运行中显示工作进度与思考/生成计时；模型静默时发送心跳，避免“无输出”观感。
 - 「历史运行」默认折叠：状态、Skill、时间；点击查看该次关键阶段与实际使用文件；不展示 Execution ID。
 - 对话历史支持清空/恢复上下文：输入区上方显示状态条与按钮；清空后历史中插入分界线，明确“以上消息模型无法读取”，新消息落在下方。历史本身不删除。
-- 历史条数默认 40 条消息（约 20 轮），由后端 `CHAT_HISTORY_LIMIT` 控制；超出的旧消息仍显示，但不进入模型。
+- 历史条数默认 80 条消息（约 40 轮），由后端 `CHAT_HISTORY_LIMIT` 控制；超出的旧消息仍显示，但不进入模型。
 
 ### 3.4 成果提醒
 
@@ -97,6 +97,7 @@
 |---|---|
 | Home | 7 天对话轮数/Token 统计（usage 缺失时标注不完整）、最近 Projects/Tasks/Artifacts、New Task |
 | Projects | 创建/编辑/归档；Overview 数量与最近活动；保留 Tasks/Files/Artifacts Tab |
+| Project Detail → Files | 「从本地上传」只进入当前项目，不污染 Global Library，文件带「项目私有」标记；「从 Library 添加」引用全局文件；移除私有无引用文件会删除 |
 | All Tasks | Global/Project 分组、置顶、筛选、三点菜单（置顶/详情/删除）；搜索仍为前端过滤，未做服务端分页（后置） |
 | Library | 文件名搜索（防抖）、类型筛选、排序、预览、删除前引用检查 |
 | Skills | 名称必填；描述/指令/System Prompt 可选；创建时上传文件/文件夹，保留相对路径；内置「流程沉淀」可生成四段式技能卡，手动复制到新建表单 |
@@ -126,7 +127,13 @@
 - 内置 Skill「流程沉淀」；在对话中引用后生成四段式 Markdown 技能卡（名称/描述/指令/System Prompt）。
 - 用户手动复制到 Skills → 新建 Skill 的四个字段；本阶段不自动落库，暂无 `save_skill` 工具。
 
-### 6.4 后置的 UI（未实现）
+### 6.4 项目私有文件（交付后补充）
+
+- Project → Files →「从本地上传」：文件只属于当前项目，不进入 Global Library；项目内 Task 默认继承。
+- 文件列表标记「项目私有」；移除时提示“无其他引用会被删除”，与 Library 文件的“仅解除引用”不同。
+- 「从 Library 添加」保留，引用全局文件。
+
+### 6.5 后置的 UI（未实现）
 
 - 全局 Artifacts 页；成果编辑/切换当前版本/版本 Diff/派生 Task。
 - 运行卡、上下文查看器、取消/重跑入口。

@@ -23,6 +23,7 @@ import {
   removeProjectFile,
   updateProject,
   updateTask,
+  uploadProjectFile,
 } from '@/api/endpoints'
 import type { ArtifactSeries, FileItem, Project, ProjectFile, Task } from '@/api/types'
 import { useAppStore } from '@/stores/app'
@@ -48,6 +49,7 @@ const notFound = ref(false)
 const activeTab = ref<TabKey>('overview')
 const pickerOpen = ref(false)
 const addingFiles = ref(false)
+const uploadInput = ref<HTMLInputElement | null>(null)
 
 const archiveOpen = ref(false)
 const archiveBusy = ref(false)
@@ -66,6 +68,15 @@ const recentSeries = computed(() =>
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .slice(0, 5),
 )
+
+const removeFileMessage = computed(() => {
+  const file = removeTarget.value?.file
+  if (!file) return ''
+  if (file.owner_project_id) {
+    return `确定从项目中移除「${file.filename}」吗？\n\n这是项目私有文件，未被历史执行引用时会被一并删除，无法恢复。`
+  }
+  return `确定从项目中移除「${file.filename}」吗？\n\n仅解除项目引用，不会删除 Global Library 中的原始文件。`
+})
 
 const tabItems = computed(() => [
   { key: 'overview' as TabKey, label: 'Overview', count: null },
@@ -152,6 +163,41 @@ async function addFiles(selected: FileItem[]): Promise<void> {
   addingFiles.value = false
   if (added > 0) {
     app.notify('success', `已添加 ${added} 个文件到项目`)
+    await reloadFiles()
+    try {
+      project.value = await getProject(project.value.id)
+    } catch {
+      /* counts refresh is best-effort */
+    }
+  }
+  for (const failure of failures) {
+    app.notify('error', failure)
+  }
+}
+
+function chooseLocalFiles(): void {
+  uploadInput.value?.click()
+}
+
+async function uploadLocalFiles(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const selected = Array.from(input.files ?? [])
+  input.value = ''
+  if (!project.value || selected.length === 0) return
+  addingFiles.value = true
+  let added = 0
+  const failures: string[] = []
+  for (const file of selected) {
+    try {
+      await uploadProjectFile(project.value.id, file)
+      added += 1
+    } catch (error) {
+      failures.push(`${file.name}：${errorMessage(error)}`)
+    }
+  }
+  addingFiles.value = false
+  if (added > 0) {
+    app.notify('success', `已从本地上传 ${added} 个文件（仅当前项目可用）`)
     await reloadFiles()
     try {
       project.value = await getProject(project.value.id)
@@ -473,22 +519,49 @@ onMounted(() => {
       <section v-if="activeTab === 'files'" role="tabpanel" class="tab-panel">
         <div class="section-toolbar">
           <p class="section-hint">
-            Project 文件是项目内 Task 的默认可用上下文来源；移除关联不会删除 Library 中的原始文件。
+            项目文件是项目内 Task 的默认可用上下文。本地上传的文件只属于当前项目，不会进入
+            Global Library；从 Library 添加则引用全局文件。
           </p>
-          <button type="button" class="btn btn--primary btn--sm" :disabled="addingFiles" @click="pickerOpen = true">
-            <AppIcon name="plus" :size="15" />
-            从 Library 添加
-          </button>
+          <div v-if="files.length > 0" class="section-toolbar__actions">
+            <button
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="addingFiles"
+              @click="chooseLocalFiles"
+            >
+              <AppIcon name="plus" :size="15" />
+              从本地上传
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="addingFiles"
+              @click="pickerOpen = true"
+            >
+              从 Library 添加
+            </button>
+          </div>
+          <input
+            ref="uploadInput"
+            type="file"
+            multiple
+            accept=".pdf,.md,.markdown,.txt,.json,.yaml,.yml,.csv,.html,.css"
+            hidden
+            @change="uploadLocalFiles"
+          />
         </div>
 
         <EmptyState
           v-if="files.length === 0"
           icon="file"
           title="项目还没有关联文件"
-          description="从 Global Library 选择文件加入项目，项目内的 Task 将默认获得这些文件作为可用上下文。"
+          description="上传本地文件（仅当前项目可用），或从 Global Library 引用已有文件；项目内的 Task 将默认获得这些文件作为可用上下文。"
         >
-          <button type="button" class="btn btn--primary" @click="pickerOpen = true">
+          <button type="button" class="btn btn--primary" :disabled="addingFiles" @click="chooseLocalFiles">
             <AppIcon name="plus" :size="16" />
+            从本地上传
+          </button>
+          <button type="button" class="btn btn--ghost" :disabled="addingFiles" @click="pickerOpen = true">
             从 Library 添加
           </button>
         </EmptyState>
@@ -515,6 +588,7 @@ onMounted(() => {
                     <span class="cell-file__icon"><AppIcon name="file" :size="14" /></span>
                     <span class="cell-file__name" :title="item.file.filename">{{ item.file.filename }}</span>
                   </button>
+                  <span v-if="item.file.owner_project_id" class="chip chip--muted">项目私有</span>
                 </td>
                 <td><span class="chip">{{ fileTypeLabel(item.file.file_type) }}</span></td>
                 <td class="cell-muted">{{ formatBytes(item.file.size) }}</td>
@@ -594,7 +668,7 @@ onMounted(() => {
       <ConfirmDialog
         :open="removeTarget !== null"
         title="移除项目文件关联"
-        :message="`确定从项目中移除「${removeTarget?.file.filename ?? ''}」吗？\n\n仅解除项目引用，不会删除 Global Library 中的原始文件。`"
+        :message="removeFileMessage"
         confirm-label="移除关联"
         danger
         :busy="removeBusy"
@@ -677,6 +751,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.section-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .section-hint {

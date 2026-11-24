@@ -33,7 +33,7 @@
 | 执行层 | Execution | 一次运行；状态、模型快照、usage、错误 |
 | 执行层 | ExecutionStep | 运行步骤（已持久化） |
 | 执行层 | ExecutionFileSnapshot | 实际参与的文件、直接/摘要、hash |
-| 资源层 | File | 用户资料；全局 Library 或 Task 临时文件 |
+| 资源层 | File | 用户资料；全局 Library、Task 临时文件或 Project 私有文件 |
 | 资源层 | ProjectFile | Project ↔ File 引用 |
 | 资源层 | TaskFileOverride | Task 对继承文件的额外引用/排除 |
 | 成果层 | ArtifactSeries | 同一类成果的版本系列 |
@@ -94,7 +94,7 @@ erDiagram
 - **Chat 上下文边界**：`Conversation.context_start_sequence` 可空；有值时只有
   `Message.sequence >= context_start_sequence` 的消息进入模型请求。
   - 清空 = 设为当前最大 sequence + 1；
-  - 恢复 = 设为 NULL，并按 `CHAT_HISTORY_LIMIT`（默认 40 条）取最近记录；
+  - 恢复 = 设为 NULL，并按 `CHAT_HISTORY_LIMIT`（默认 80 条）取最近记录；
   - 历史 Message 永不删除、不修改，只影响模型输入。
 - Message 的 `metadata` 记录：Skill 与文件清单、预算/截断状态、工具步骤与耗时；**不存完整 Prompt 或文件全文**。
 
@@ -103,7 +103,8 @@ erDiagram
 - 上传到 Library 的文件可被多个 Project/Task 引用；Task 只能读取自己可用范围内的文件。
 - Project Task 默认继承 Project 文件；`TaskFileOverride` 用于额外引用或排除。
 - 临时文件：`is_temporary=true` + `owner_task_id`，只属于某个 Task，不出现在 Library；Chat 只随当前一轮生效。
-- 删除文件：先检查引用/快照；有引用时返回 409（先解除引用），临时文件按生命周期清理；不物理删除仍被历史快照引用的文件。
+- 项目私有文件：`is_temporary=true` + `owner_project_id`，不出现在 Global Library，但属于项目文件，项目内 Task 默认继承；同项目 Task 可见，跨项目不可见。
+- 删除文件：先检查引用/快照；有引用时返回 409（先解除引用），临时文件按生命周期清理；项目私有文件在移除关联/删除项目后若无引用则清理；不物理删除仍被历史快照引用的文件。
 
 ### 4.4 Execution
 
@@ -136,7 +137,7 @@ erDiagram
 | 实体 | 规则 |
 |---|---|
 | Workspace | 不提供物理删除 |
-| Project | 归档；删除前检查关联 |
+| Project | 归档；删除前检查关联；清理项目私有且无引用的文件 |
 | Task | 删除时清理对话/消息、Execution/步骤/快照、Artifact 系列/版本、Task Skill/文件覆盖、Task 临时文件；Project/Library 原文件保留 |
 | Conversation | 随 Task 生命周期 |
 | File | 软删/引用检查；被引用返回 409 |
@@ -164,7 +165,18 @@ erDiagram
 - 内容写入现有 `files` + 内容寻址存储；文件名取成果标题 + `.md`。
 - 重复导出相同内容复用同一 File；不新增 `task_artifacts` / `execution_artifact_snapshots`。
 
-### 5.3 后置的规划（未实现，勿当成现状）
+### 5.3 `files.owner_project_id`（已实现）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| owner_project_id | UUID / Nullable | 项目私有文件归属；配合 `is_temporary=true` 使用 |
+
+- 迁移：`p6q7r8s9t0u1_project_private_files.py`，`down_revision = o5p6q7r8s9t0`，提供 downgrade。
+- 上传接口：`POST /api/v1/projects/{id}/files/upload`；文件写入项目文件，不出现在 Global Library。
+- 语义：项目内 Task 默认继承；移除项目关联或删除项目时，无引用/无快照的私有文件被清理；同名同内容上传按内容寻址复用。
+- 兼容：上传到 Library 时，若相同内容已是私有文件，会复用并提升为全局文件。
+
+### 5.4 后置的规划（未实现，勿当成现状）
 
 - `task_artifacts`：Task 持久引用 Artifact 并钉版本。
 - `execution_artifact_snapshots`：执行实际使用的 Artifact 快照。
@@ -172,7 +184,7 @@ erDiagram
 - `prompt_templates`：Prompt 模板表（当前用 Skill 替代）。
 - `conversations.context_reset_at`：原时间戳方案，未采用；实际用 `context_start_sequence`。
 
-### 5.4 迁移约定
+### 5.5 迁移约定
 
 - 全部增量；每个迁移提供 downgrade；升级前备份。
 - 不引入 pgvector/pg_trgm 作为必需依赖；搜索索引按需评估。
@@ -181,5 +193,5 @@ erDiagram
 
 ## 6. 事实源与工程约定
 
-- **字段/约束事实源**：`backend/app/modules/*/models.py`；**变更事实源**：`backend/alembic/versions/`（当前 head `o5p6q7r8s9t0`）。
+- **字段/约束事实源**：`backend/app/modules/*/models.py`；**变更事实源**：`backend/alembic/versions/`（当前 head `p6q7r8s9t0u1`）。
 - 本文只维护：实体关系、业务不变量、删除规则、迁移策略、当前阶段实装变更。

@@ -49,6 +49,11 @@ class File(TimestampMixin, Base):
     owner_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUIDType, nullable=True, index=True
     )
+    # Project-private files: is_temporary=True + owner_project_id set. They are
+    # hidden from the Global Library but available to every Task in the project.
+    owner_project_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, nullable=True, index=True
+    )
 
 
 class ProjectFile(Base):

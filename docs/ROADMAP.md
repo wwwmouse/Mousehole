@@ -65,7 +65,7 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**：让资料、�
 - Chat 上下文清空/恢复：新增 `conversations.context_start_sequence` 与
   `PATCH /tasks/{id}/messages/context`；消息不删除，只改变下一次请求携带的历史。
 - 对话界面增加上下文分界线：线上方明确提示“模型无法读取”，新消息自动落在下方。
-- `CHAT_HISTORY_LIMIT` 默认 40 条消息（约 20 轮），可通过环境变量调整。
+- `CHAT_HISTORY_LIMIT` 默认 80 条消息（约 40 轮），可通过环境变量调整。
 - 内置「流程沉淀」元 Skill：把一次任务/对话提炼成四段式 Markdown 技能卡，可复制到新建 Skill。
 - 跨实体搜索、服务端分页、Prompt 模板、`save_skill` 自动化工具后置。
 
@@ -86,7 +86,7 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**：让资料、�
 
 | 状态 | 内容 |
 |---|---|
-| **已交付** | 工程硬化；Artifact → Library；聊天上下文清空/恢复与分界线；流程沉淀元 Skill；历史条数配置化 |
+| **已交付** | 工程硬化；Artifact → Library；聊天上下文清空/恢复与分界线；流程沉淀元 Skill；历史条数配置化；项目私有文件上传（交付后补充） |
 | **后置** | 全局 Artifacts 页；成果编辑/派生 Task；运行卡/上下文查看器/Diff；⌘K 跨实体搜索；Task/Project 服务端搜索与分页；Prompt 模板；`save_skill` 工具 |
 
 原则：优先“能看见的复用与日常效率”，不引入引用表、不重建上下文管线、不增加新基础设施。
@@ -95,9 +95,9 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**：让资料、�
 
 | 里程碑 | 结果 |
 |---|---|
-| **M0 工程硬化（已完成）** | 大文件解析不阻塞 API/SSE；日志可定位且不泄漏 Key；Postgres 迁移测试通过；工作模式可保存 Markdown 成果；任务删除可级联清理关联数据并返回明确错误。当前测试：SQLite 132 / Postgres 59 / 前端 88 / E2E 3。 |
+| **M0 工程硬化（已完成）** | 大文件解析不阻塞 API/SSE；日志可定位且不泄漏 Key；Postgres 迁移测试通过；工作模式可保存 Markdown 成果；任务删除可级联清理关联数据并返回明确错误。当前测试：SQLite 134 / Postgres 59 / 前端 88 / E2E 3。 |
 | **M1 复用（已完成）** | Artifact 可一键「存入 Library」，生成 Markdown 文件；可在 Library 搜索、预览；可被任意 Project/Task 引用；重复导出复用同一文件；删除 Artifact/Task 不影响已导出文件。 |
-| **M3 效率子集（已完成）** | Chat 可清空/恢复上下文；清空后旧消息不进入模型，历史不删除；界面有明确分界线；内置流程沉淀元 Skill；历史默认 40 条可配置。 |
+| **M3 效率子集（已完成）** | Chat 可清空/恢复上下文；清空后旧消息不进入模型，历史不删除；界面有明确分界线；内置流程沉淀元 Skill；历史默认 80 条可配置。 |
 | **M2 可信（后置）** | 本阶段不做；保留 Artifact 来源字段作为最小追溯。 |
 | **v0.3.0 验收** | 完成“生成成果 → 存入 Library → 新 Project/Task 引用并执行”一条链；清空上下文后模型不再读取旧消息，恢复后重新纳入；迁移可回滚、测试与 E2E 通过。 |
 
@@ -107,7 +107,7 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**：让资料、�
 - **文件只存一份**：Library 按内容寻址；相同内容重复导出复用同一 File，不产生重复文件。
 - **复用走现有规则**：导出的 File 与普通上传文件完全一致，按现有 Project/Task 继承、引用、删除保护规则使用。
 - **清空上下文只影响 Chat**：设置 `context_start_sequence`，旧 Message 永不删除；恢复时边界置空，按 `CHAT_HISTORY_LIMIT` 取最近 N 条。
-- **历史条数是消息数，不是轮数**：40 条 ≈ 20 轮；完整历史始终可见，只有模型输入被截取。
+- **历史条数是消息数，不是轮数**：80 条 ≈ 40 轮；完整历史始终可见，只有模型输入被截取。
 - **流程沉淀只产出文本**：元 Skill 输出四段式技能卡，不自动写 Skill 库；`save_skill` 工具后置。
 - **Chat 模式无工具，工作模式模型决定工具**：不自动保存成果；失败不伪装成功，取消 ≠ 失败。
 - **无新基础设施**：不引入引用表、向量库、消息队列、多 Agent、多用户。
