@@ -330,6 +330,10 @@ export function artifactDownloadUrl(artifactId: string): string {
   return `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`
 }
 
+export function fileRawUrl(fileId: string): string {
+  return `/api/v1/files/${encodeURIComponent(fileId)}/raw`
+}
+
 /* ---------------------------------- stats ------------------------------------ */
 
 export function getStatsOverview(days = 7): Promise<StatsOverview> {

@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import Modal from '@/components/Modal.vue'
-import { getFile, getFileContent } from '@/api/endpoints'
+import { fileRawUrl, getFile, getFileContent } from '@/api/endpoints'
 import type { FileContent, FileDetail } from '@/api/types'
 import { errorMessage } from '@/utils/errors'
 import { fileTypeLabel, formatBytes, formatDateTime } from '@/utils/format'
@@ -18,6 +18,10 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const isOpen = computed(() => Boolean(props.fileId))
+const isPdf = computed(() => detail.value?.file_type === 'pdf')
+const rawUrl = computed(() =>
+  props.fileId ? fileRawUrl(props.fileId) : '',
+)
 const isMarkdown = computed(() => {
   const type = detail.value?.file_type
   return type === 'md' || type === 'markdown'
@@ -29,12 +33,12 @@ async function load(fileId: string): Promise<void> {
   detail.value = null
   content.value = null
   try {
-    const [fileDetail, fileContent] = await Promise.all([
-      getFile(fileId),
-      getFileContent(fileId),
-    ])
+    const fileDetail = await getFile(fileId)
     detail.value = fileDetail
-    content.value = fileContent
+    // PDF 用浏览器原生预览，避免扫描版/复杂排版被纯文本提取后看起来一片空白。
+    if (fileDetail.file_type !== 'pdf') {
+      content.value = await getFileContent(fileId)
+    }
   } catch (err) {
     error.value = errorMessage(err)
   } finally {
@@ -80,7 +84,13 @@ watch(
         <span v-if="content?.truncated" class="preview-meta__warn">内容已截断</span>
       </div>
       <div class="preview-body">
-        <MarkdownText v-if="isMarkdown && content" :text="content.text" />
+        <iframe
+          v-if="isPdf"
+          :src="rawUrl"
+          class="preview-pdf"
+          title="PDF 原始页面预览"
+        />
+        <MarkdownText v-else-if="isMarkdown && content" :text="content.text" />
         <pre v-else-if="content" class="preview-text">{{ content.text }}</pre>
         <p v-else class="preview-empty">没有可显示的内容。</p>
       </div>
@@ -118,6 +128,14 @@ watch(
   max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.preview-pdf {
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
 }
 
 .preview-text {

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
 from fastapi.testclient import TestClient
+from pypdf import PdfWriter
 
 from app.modules.document.parsers import parse_pdf, parse_text
 from app.modules.document.service import extract_text
@@ -58,6 +61,20 @@ def test_parse_pdf_without_text_raises() -> None:
         parse_pdf(build_minimal_pdf(""))
 
 
+def build_blank_pdf(pages: int = 3) -> bytes:
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=200, height=200)
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def test_scanned_pdf_is_reported_explicitly() -> None:
+    with pytest.raises(FileParseError, match="扫描版"):
+        parse_pdf(build_blank_pdf(3))
+
+
 def test_parse_text_normalizes_newlines_and_blank_lines() -> None:
     raw = "# Title\r\n\r\n\r\nBody   \r\nEnd\r\n".encode("utf-8")
     assert parse_text(raw) == "# Title\n\nBody\nEnd"
@@ -111,6 +128,11 @@ def test_upload_pdf_and_read_extracted_content(client: TestClient) -> None:
     payload = content.json()
     assert "Hello PDF" in payload["text"]
     assert payload["truncated"] is False
+
+    raw = client.get(f"/api/v1/files/{body['id']}/raw")
+    assert raw.status_code == 200
+    assert raw.headers["content-type"].startswith("application/pdf")
+    assert raw.content.startswith(b"%PDF")
 
 
 def test_upload_markdown_content_is_cleaned(client: TestClient) -> None:

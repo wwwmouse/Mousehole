@@ -99,7 +99,7 @@
 | Projects | 创建/编辑/归档；Overview 数量与最近活动；保留 Tasks/Files/Artifacts Tab |
 | Project Detail → Files | 「从本地上传」只进入当前项目，不污染 Global Library，文件带「项目私有」标记；「从 Library 添加」引用全局文件；移除私有无引用文件会删除 |
 | All Tasks | Global/Project 分组、置顶、筛选、三点菜单（置顶/详情/删除）；搜索仍为前端过滤，未做服务端分页（后置） |
-| Library | 文件名搜索（防抖）、类型筛选、排序、预览、删除前引用检查 |
+| Library | 文件名搜索（防抖）、类型筛选、排序、预览、删除前引用检查；PDF 用浏览器原始页面预览，扫描版会提示缺少文本层/暂不支持 OCR |
 | Skills | 名称必填；描述/指令/System Prompt 可选；创建时上传文件/文件夹，保留相对路径；内置「流程沉淀」可生成四段式技能卡，手动复制到新建表单 |
 | Settings | Provider 选择、API Key 掩码编辑、测试连接；配置存本地，不入 Git |
 

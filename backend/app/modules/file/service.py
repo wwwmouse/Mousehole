@@ -312,6 +312,14 @@ def get_file_detail(session: Session, file_id: uuid.UUID) -> FileDetail:
     return detail.model_copy(update={"references": [*project_refs, *task_refs]})
 
 
+def get_file_raw(
+    session: Session, file_id: uuid.UUID
+) -> tuple[File, bytes]:
+    """返回原始文件字节；仅用于浏览器只读预览。"""
+    file = _get_active_file(session, file_id)
+    return file, get_storage().read(file.storage_key)
+
+
 def get_file_content(
     session: Session, file_id: uuid.UUID, max_chars: int = 20000
 ) -> FileContentRead:

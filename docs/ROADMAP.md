@@ -95,7 +95,7 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**：让资料、�
 
 | 里程碑 | 结果 |
 |---|---|
-| **M0 工程硬化（已完成）** | 大文件解析不阻塞 API/SSE；日志可定位且不泄漏 Key；Postgres 迁移测试通过；工作模式可保存 Markdown 成果；任务删除可级联清理关联数据并返回明确错误。当前测试：SQLite 135 / Postgres 59 / 前端 88 / E2E 3。 |
+| **M0 工程硬化（已完成）** | 大文件解析不阻塞 API/SSE；日志可定位且不泄漏 Key；Postgres 迁移测试通过；工作模式可保存 Markdown 成果；任务删除可级联清理关联数据并返回明确错误。当前测试：SQLite 136 / Postgres 59 / 前端 88 / E2E 3。 |
 | **M1 复用（已完成）** | Artifact 可一键「存入 Library」，生成 Markdown 文件；可在 Library 搜索、预览；可被任意 Project/Task 引用；重复导出复用同一文件；删除 Artifact/Task 不影响已导出文件。 |
 | **M3 效率子集（已完成）** | Chat 可清空/恢复上下文；清空后旧消息不进入模型，历史不删除；界面有明确分界线；内置流程沉淀元 Skill；历史默认 80 条可配置。 |
 | **M2 可信（后置）** | 本阶段不做；保留 Artifact 来源字段作为最小追溯。 |
@@ -122,7 +122,7 @@ RAG/向量库/embedding；Office/OCR/音视频；MCP/GitHub/IDE/外部 Agent；�
 
 ## 4. 后续阶段候选
 
-- **Phase 6 输入与规模**：Office 解析、Postgres 全文检索（必要时再评估 RAG）、定时任务/周报、文件版本。
+- **Phase 6 输入与规模**：Office 解析、扫描版 PDF OCR、Postgres 全文检索（必要时再评估 RAG）、定时任务/周报、文件版本。
 - **Phase 7 集成与自动化**：只读 MCP、GitHub/仓库分析、IDE/CLI 导出、外部 Agent 接入（先有权限与审批模型）。
 - **Phase 8 能力体系**：Skill 版本/组合、轻量 Workflow 模板、Mini Eval、成本报表、`save_skill` 自动化。
 

@@ -11,6 +11,7 @@ Contract:
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Response, UploadFile, status
 
@@ -58,6 +59,22 @@ def get_file_content(
     max_chars: int = Query(default=20000, ge=1),
 ) -> FileContentRead:
     return service.get_file_content(db, file_id, max_chars=max_chars)
+
+
+@router.get("/{file_id}/raw")
+def get_file_raw(file_id: uuid.UUID, db: DbSession) -> Response:
+    """返回原始文件字节，供浏览器 PDF 预览等只读场景使用。"""
+    file, data = service.get_file_raw(db, file_id)
+    return Response(
+        content=data,
+        media_type=file.mime_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{quote(file.filename)}"
+            ),
+            "Cache-Control": "private, max-age=60",
+        },
+    )
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

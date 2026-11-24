@@ -67,6 +67,16 @@ def parse_pdf(data: bytes) -> str:
     except Exception as exc:  # pypdf raises many exception types for bad input
         raise FileParseError(f"PDF 解析失败：{exc}") from exc
 
+    # 扫描版/图片型 PDF 通常只有封面等零星文字，正文没有文本层。
+    # 明确失败，避免把几百个空白字符当成“解析成功”而让预览/对话一片空白。
+    page_count = len(pages)
+    if page_count >= 3 and len(text) < 10 * page_count:
+        raise FileParseError(
+            f"该 PDF 可能是扫描版/图片型：{page_count} 页仅提取到 {len(text)} 个字符，"
+            "没有可用文本层。当前不支持 OCR；请上传可复制文字的 PDF，"
+            "或使用原始页面预览。"
+        )
+
     if not text:
         raise FileParseError("PDF 中未提取到文本")
     return text
