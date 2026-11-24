@@ -170,6 +170,76 @@ def upload_file(
     return FileRead.model_validate(file)
 
 
+def create_global_text_file(
+    session: Session,
+    *,
+    filename: str,
+    content: str,
+) -> FileRead:
+    """Create (or reuse) a Global Library Markdown file from in-app content.
+
+    Used by the "artifact → Library" flow: the artifact stays versioned, while
+    the exported file becomes ordinary Library material that can be attached to
+    any Project or Task. Identical content reuses the existing File row because
+    storage is content-addressed.
+    """
+    if not content.strip():
+        raise UnprocessableError("内容为空，无法存入 Library")
+
+    name = _safe_filename(filename) or "成果.md"
+    if not name.lower().endswith(".md"):
+        name = f"{name}.md"
+    if len(name) > MAX_FILENAME_LENGTH:
+        raise UnprocessableError(
+            "文件名过长", details={"max_length": MAX_FILENAME_LENGTH}
+        )
+
+    data = content.encode("utf-8")
+    settings = get_settings()
+    if len(data) > settings.max_upload_bytes:
+        raise PayloadTooLargeError(
+            "内容超过文件库大小限制",
+            details={"max_bytes": settings.max_upload_bytes},
+        )
+
+    storage_key, content_hash, size = get_storage().save(data, ".md")
+    existing = repository.get_by_storage_key(session, storage_key)
+    if existing is not None:
+        changed = False
+        if existing.status != "active":
+            existing.status = "active"
+            existing.filename = name
+            existing.file_type = "md"
+            existing.mime_type = "text/markdown"
+            existing.size = size
+            existing.content_hash = content_hash
+            changed = True
+        if existing.is_temporary:
+            # An exported artifact must be visible in the Global Library.
+            existing.is_temporary = False
+            existing.owner_task_id = None
+            changed = True
+        if changed:
+            session.commit()
+            session.refresh(existing)
+        return FileRead.model_validate(existing)
+
+    file = repository.create(
+        session,
+        filename=name,
+        storage_key=storage_key,
+        file_type="md",
+        mime_type="text/markdown",
+        size=size,
+        content_hash=content_hash,
+        is_temporary=False,
+        owner_task_id=None,
+    )
+    session.commit()
+    session.refresh(file)
+    return FileRead.model_validate(file)
+
+
 def list_files(
     session: Session,
     *,

@@ -9,6 +9,7 @@ import Modal from '@/components/Modal.vue'
 import {
   artifactDownloadUrl,
   deleteArtifact,
+  exportArtifactToLibrary,
   getArtifactSeries,
   listArtifactSeries,
   renameArtifactSeries,
@@ -35,10 +36,25 @@ const renaming = ref(false)
 
 const deleteTarget = ref<Artifact | null>(null)
 const deleting = ref(false)
+const exporting = ref(false)
 
 function downloadCurrent(): void {
   if (!selectedArtifact.value) return
   window.location.assign(artifactDownloadUrl(selectedArtifact.value.id))
+}
+
+async function storeToLibrary(): Promise<void> {
+  const target = selectedArtifact.value
+  if (!target || exporting.value) return
+  exporting.value = true
+  try {
+    const file = await exportArtifactToLibrary(target.id)
+    app.notify('success', `已存入 Library：${file.filename}`)
+  } catch (err) {
+    app.notifyError(err)
+  } finally {
+    exporting.value = false
+  }
 }
 
 async function confirmDeleteArtifact(): Promise<void> {
@@ -191,6 +207,15 @@ onMounted(() => {
             </button>
             <button type="button" class="btn btn--ghost btn--sm" @click="downloadCurrent">
               下载
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="exporting"
+              title="复制到 Global Library，之后可被任意 Project 或 Task 引用"
+              @click="storeToLibrary"
+            >
+              {{ exporting ? '存入中…' : '存入 Library' }}
             </button>
             <button
               type="button"

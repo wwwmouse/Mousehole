@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.modules.artifact import repository
 from app.modules.artifact.models import Artifact, ArtifactSeries
+from app.modules.file import service as file_service
+from app.modules.file.schemas import FileRead
 from app.modules.task.models import Task
 from app.shared.exceptions import ConflictError, NotFoundError, UnprocessableError
 
@@ -112,3 +114,23 @@ def get_artifact(session: Session, artifact_id: uuid.UUID) -> Artifact:
     if artifact is None:
         raise NotFoundError("成果不存在", details={"artifact_id": str(artifact_id)})
     return artifact
+
+
+def export_to_library(session: Session, artifact: Artifact) -> FileRead:
+    """Copy an artifact's Markdown into the Global Library as a normal File.
+
+    The artifact remains an independent, versioned result; the exported File is
+    a snapshot that can be attached to any Project/Task through the existing
+    file-linking rules. The original title + version keep it recognizable.
+    """
+    if not artifact.content:
+        raise UnprocessableError(
+            "该成果没有可导出的 Markdown 内容",
+            details={"artifact_id": str(artifact.id)},
+        )
+    filename = f"{(artifact.title or '').strip() or '成果'}.md"
+    return file_service.create_global_text_file(
+        session,
+        filename=filename,
+        content=artifact.content,
+    )

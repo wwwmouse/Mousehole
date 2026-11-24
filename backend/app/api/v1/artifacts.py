@@ -13,6 +13,7 @@ from app.modules.artifact.schemas import (
     ArtifactSeriesRead,
     SeriesUpdate,
 )
+from app.modules.file.schemas import FileRead
 from app.modules.task import service as task_service
 
 router = APIRouter()
@@ -75,6 +76,19 @@ def rename_series(
 @router.get("/artifacts/{artifact_id}", response_model=ArtifactRead)
 def get_artifact(artifact_id: uuid.UUID, db: DbSession) -> ArtifactRead:
     return ArtifactRead.model_validate(artifact_service.get_artifact(db, artifact_id))
+
+
+@router.post(
+    "/artifacts/{artifact_id}/to-library",
+    response_model=FileRead,
+    status_code=201,
+)
+def export_artifact_to_library(
+    artifact_id: uuid.UUID, db: DbSession
+) -> FileRead:
+    """Copy the artifact's Markdown into the Global Library as a normal File."""
+    artifact = artifact_service.get_artifact(db, artifact_id)
+    return artifact_service.export_to_library(db, artifact)
 
 
 @router.get("/artifacts/{artifact_id}/download")

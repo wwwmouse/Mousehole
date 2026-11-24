@@ -296,6 +296,13 @@ export function deleteArtifact(artifactId: string): Promise<void> {
   })
 }
 
+export function exportArtifactToLibrary(artifactId: string): Promise<FileItem> {
+  return request<FileItem>(
+    `/artifacts/${encodeURIComponent(artifactId)}/to-library`,
+    { method: 'POST' },
+  )
+}
+
 export function artifactDownloadUrl(artifactId: string): string {
   return `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`
 }
