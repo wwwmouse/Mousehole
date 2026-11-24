@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**状态：v0.2.0-mvp 已发布（Phase 1–4 完成，MVP 功能验收通过）。Phase 5（v0.3.0「复用与可信」）进行中。** 后续阶段规划、决策与发布记录见 [演进路线](docs/ROADMAP.md)。
+**状态：v0.3.0 已交付（Phase 5「复用与效率」完成：成果可存入 Library 复用、聊天上下文可清空/恢复、内置流程沉淀 Skill）；可信能力后置。** 后续阶段规划见 [演进路线](docs/ROADMAP.md)。
 
 ## 核心闭环
 
@@ -129,7 +129,7 @@ E2E 默认使用系统 Edge（`channel: 'msedge'`）；无 Edge 时执行 `npx p
 
 ## 文档
 
-- [演进路线：Phase 5+ 阶段规划、决策与发布记录](docs/ROADMAP.md)
+- [演进路线：Phase 5+ 阶段规划与交付结果](docs/ROADMAP.md)
 - [架构](docs/ARCHITECTURE.md) · [数据模型](docs/DATA_MODEL.md) · [界面与交互指南](docs/UI_GUIDE.md)
 - [工程约束](AGENTS.md)
 - [MVP 文档归档（只读）](docs/archive/mvp/INDEX.md) · [项目学习笔记](docs/notes/PROJECT_LEARNING_GUIDE.md)

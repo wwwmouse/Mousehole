@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — mousehole 系统架构
 
-**文档版本：** v0.2.0-mvp  
+**文档版本：** v0.3.0  
 **状态：** living（长期维护）  
-**最后更新：** 2026-11-23  
+**最后更新：** 2026-11-24  
 **定位：** 当前系统的模块边界、依赖方向、关键数据流与扩展点。只写“为什么/边界/扩展点”，字段与目录细节以代码为准。  
 **相关文档：** `ROADMAP.md`（阶段规划）、`DATA_MODEL.md`（数据不变量）、`UI_GUIDE.md`（界面）、`AGENTS.md`（工程约束）。
 
@@ -75,8 +75,9 @@ API 层：`app/api/v1/` 下按资源拆分（workspaces、projects、tasks、tas
 
 ### 4.1 Chat（含受控工具）
 
-1. `POST /api/v1/tasks/{id}/messages`（SSE）→ 校验 Task、解析模型与参数、加载历史。
-2. 根据意图开关/关键词决定是否进入工具 pre-pass（非流式，最多 4 轮）。
+1. `POST /api/v1/tasks/{id}/messages`（SSE）→ 校验 Task、解析模型与参数、按
+   `conversations.context_start_sequence` 截取历史（清空/恢复只影响 Chat）。
+2. 对话模式不提供工具；工作模式先进入工具 pre-pass（非流式，最多 4 轮），由模型决定是否调用。
 3. 模型可调用 `read_task_files` / `read_task_file` / `save_artifact` / `create_execution`；后端 allowlist 校验并执行，结果回灌。
 4. 最终回答统一走流式生成；期间发送 `thinking` 心跳避免“假死”观感。
 5. 持久化 Message（含 usage、工具步骤、引用文件/Skill 的 metadata）。
@@ -105,6 +106,7 @@ API 层：`app/api/v1/` 下按资源拆分（workspaces、projects、tasks、tas
 - 预算按模型窗口推导（扣除输出与开销预留），未知模型回退 32k；Workspace 可覆盖。
 - 超预算：分批 + 每批摘要 + 汇总；只对实际参与的文件写快照，并标注 `direct` / `summarized`。
 - Chat 默认读取全文（≤2MB/文件），总预算默认 64k；超预算才截断并提示用 `read_task_file` 分页。
+- Chat 历史按 `context_start_sequence` 截取：清空只把旧消息排除出下一次请求，不删除历史；恢复把边界置空，并按 `CHAT_HISTORY_LIMIT`（默认 40 条消息）取最近记录。
 
 ### 4.4 模型接入
 
@@ -137,7 +139,7 @@ pending ──► running ──► completed
 
 ### 5.3 错误处理
 
-统一异常类型 + 错误码；用户可见错误与调试日志分离；日志不写 Key、文件全文、Prompt 全文（Phase 5 补日志脱敏机制）。
+统一异常类型 + 错误码；用户可见错误与调试日志分离；日志不写 Key、文件全文、Prompt 全文（Phase 5 已补日志脱敏与 request-id）。
 
 ---
 
@@ -160,20 +162,19 @@ pending ──► running ──► completed
 | 新 Pipeline 阶段 | `execution/pipeline.py`（阶段顺序硬编码）、`services` | `step_type` 为自由字符串；前端 SSE 通用 |
 | 新 Artifact 类型 | `artifact/models.py` 的 `content_type`/`storage_key` + 下载/预览分支 | 文本类成本低；二进制需改存储与预览 |
 | 新页面 | `frontend/src/router`、`AppShell`、`api/endpoints.ts` | 页面组件不写复杂业务 |
-| 新搜索/索引 | Phase 5 起新增只读 `search` 模块 | 先 ILIKE/索引，不引入外部搜索引擎 |
+| 新搜索/索引 | 尚未实现；后续按需新增只读 `search` 模块 | 先 ILIKE/索引，不引入外部搜索引擎 |
 
 ---
 
-## 8. Phase 5 规划增量（未实现）
+## 8. Phase 5 已实现变更（v0.3.0）
 
-> 阶段规格见 `ROADMAP.md` §4；数据增量见 `DATA_MODEL.md` §5；界面见 `UI_GUIDE.md` §6。
+> 阶段规格见 `ROADMAP.md` §3；数据变更见 `DATA_MODEL.md` §5；界面见 `UI_GUIDE.md` §6。
 
-- **ContextItem 抽象**：文件 / 成果 / Skill 资料统一参与预算、排序、截断；执行写入 `context_manifest`（只存清单与 token，不存全文）。
-- **成果复用**：Task 引用 Artifact（钉版本），Chat 与 Execution 均可纳入上下文；新增引用表与执行快照表。
-- **解析线程化**：PDF/文本解析移出事件循环（线程池 + 超时），避免阻塞 API/SSE。
-- **只读搜索模块**：聚合 Project/Task/File/Artifact/Message。
-- **日志与配置**：统一 logging + 脱敏过滤器；并发/预算/模型窗口配置化。
-- **前端**：全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、模板、对话上下文管理。
+- **成果 → Library**：新增 `POST /api/v1/artifacts/{id}/to-library`，把成果 Markdown 复制为普通 File；内容寻址，重复导出复用同一文件；不新增引用表。
+- **聊天上下文边界**：`conversations.context_start_sequence` + `PATCH /api/v1/tasks/{id}/messages/context`；清空/恢复不删除 Message，只改变送入模型的历史。
+- **流程沉淀 Skill**：内置 `skill_design`，固定输出四段式 Markdown 技能卡；仍由用户复制到新建 Skill，暂未增加 `save_skill` 工具。
+- **工程硬化**：解析线程池 + 超时、日志脱敏与 request-id、Postgres 迁移测试、对话/工作模式、配置化、前端单测。
+- **未实现（后置）**：Task 引用 Artifact、`context_manifest`、全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、PromptTemplate、`save_skill`。
 
 边界：不引入 RAG/向量库/embedding、消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
 
@@ -187,21 +188,21 @@ pending ──► running ──► completed
 | `backend/app/modules/` | 12 个业务模块（见 §3） |
 | `backend/app/core/`、`shared/` | 配置、异常、枚举、usage、默认值 |
 | `backend/app/infrastructure/` | SQLAlchemy Base/Session |
-| `backend/alembic/versions/` | 迁移（当前 head `n4o5p6q7r8s9`） |
-| `backend/tests/` | 107 个 pytest（v0.2.0-mvp） |
-| `frontend/src/views/` | 页面（TaskView 较大，Phase 5 计划拆分） |
+| `backend/alembic/versions/` | 迁移（当前 head `o5p6q7r8s9t0`） |
+| `backend/tests/` | 132 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
+| `frontend/src/views/` | 页面（TaskView 已拆出 composable，仍偏大） |
 | `frontend/src/components/` | ChatPanel、RunProgress、TaskArtifacts、FilePreviewModal 等 |
 | `frontend/e2e/` | Playwright 核心闭环（Mock API） |
 | `scripts/` | `backup.ps1`、`restore.ps1` |
 
 ---
 
-## 10. 已知限制（v0.2.0-mvp）
+## 10. 已知限制（v0.3.0）
 
 - 进程内 Scheduler：单实例；重启后 running 标记 failed，无断点续跑。
-- 解析在 async Pipeline 内同步执行（Phase 5 H1 修复），大文件可能阻塞。
-- 测试跑 SQLite 内存库；Postgres 迁移未被自动化覆盖（Phase 5 H3 修复）。
-- 无日志脱敏配置；Chat 失败不落库（Phase 5 H2/F10 修复）。
 - 无 RAG/向量检索；上下文靠显式预算 + 摘要。
 - 无多用户/权限/协作；无移动端。
-- `TaskView.vue`、`ChatPanel.vue` 偏大，前端无单测（Phase 5 H7 改善）。
+- Execution 仍不是产品概念：无运行卡、上下文查看器、Diff、取消/重跑入口；Artifact 只保留来源字段。
+- 无跨实体搜索、Task/Project 服务端分页、Prompt 模板、`save_skill` 工具。
+- 无全局 Artifacts 页；成果复用走 Library 文件。
+- `TaskView.vue`、`ChatPanel.vue` 仍偏大；前端已有 88 个单测，但复杂交互的覆盖仍有限。

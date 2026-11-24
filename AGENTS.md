@@ -9,7 +9,7 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：**v0.2.0-mvp 已发布**（Phase 1–4 完成并通过 MVP 功能验收）。当前阶段 Phase 5（v0.3.0「复用与可信」）进行中；post-MVP 所有阶段的规划、决策、验收与发布记录统一在 `docs/ROADMAP.md`——**一个阶段一个章节，不再新建 Phase 专属文档**。
+当前状态：**v0.3.0 已交付**（Phase 5「复用与效率」完成；可信能力后置）。post-MVP 所有阶段的规划、决策、验收与发布记录统一在 `docs/ROADMAP.md`——**一个阶段一个章节，不再新建 Phase 专属文档**。
 MVP 期文档（`PRODUCT_SPEC`、`MVP_SPEC`、`TECHNICAL_DECISIONS`、`DEVELOPMENT_PLAN`）已归档冻结在 `docs/archive/mvp/`，只读；`ARCHITECTURE` / `DATA_MODEL` / `UI_GUIDE` 为技术现状文档，可包含已确认但尚未实现的阶段增量（必须标注"未实现"），阶段交付后回填实装补充。
 
 ## 2. 开工前必读（按顺序）
@@ -22,7 +22,7 @@ MVP 期文档（`PRODUCT_SPEC`、`MVP_SPEC`、`TECHNICAL_DECISIONS`、`DEVELOPME
 
 历史文档：`docs/archive/mvp/`（MVP 只读归档）；学习笔记：`docs/notes/PROJECT_LEARNING_GUIDE.md`（非规范）。
 
-> 文档版本跟随最近交付阶段：当前为 `v0.2.0-mvp`；Phase 5 交付后 living 文档统一升到 `v0.3.0`。
+> 文档版本跟随最近交付阶段：当前为 `v0.3.0`；living 文档已按 Phase 5 交付回填。
 
 只做当前 Phase 的事。不属于本 Phase 的"顺手改进"一律不做，最多记入待办。
 
