@@ -251,6 +251,15 @@ export interface TaskMessages {
   conversation_id: string | null
   messages: ChatMessage[]
   task_usage: TaskUsage | null
+  context_cleared?: boolean
+  context_start_sequence?: number | null
+}
+
+export interface ConversationContext {
+  task_id: string
+  conversation_id: string
+  context_cleared: boolean
+  context_start_sequence?: number | null
 }
 
 export interface Provider {

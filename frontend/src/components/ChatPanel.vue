@@ -14,6 +14,7 @@ import {
   listSkills,
   listTaskMessages,
   removeTaskFileOverride,
+  setConversationContext,
   uploadTaskTemporaryFile,
 } from '@/api/endpoints'
 import type {
@@ -57,6 +58,9 @@ const router = useRouter()
 
 const messages = ref<ChatMessage[]>([])
 const taskUsage = ref<TaskUsage | null>(null)
+const contextCleared = ref(false)
+const contextStartSequence = ref<number | null>(null)
+const clearingContext = ref(false)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const input = ref('')
@@ -93,6 +97,15 @@ const {
 } = useChatStream({ onDone: handleStreamDone })
 
 const selectedSkillLabel = computed(() => selectedSkill.value?.name ?? '')
+
+// 分隔线插在第一条「模型仍能读取」的消息之前；如果没有这样的消息，
+// 就放在最后一条历史消息之后。
+const contextDividerIndex = computed(() => {
+  if (contextStartSequence.value == null) return -1
+  const boundary = contextStartSequence.value
+  const index = messages.value.findIndex((item) => item.sequence >= boundary)
+  return index === -1 ? messages.value.length : index
+})
 
 function handleStreamDone(data: ChatStreamDone): void {
   taskUsage.value = data.task_usage as TaskUsage | null
@@ -154,6 +167,8 @@ async function load(): Promise<void> {
     const data = await listTaskMessages(props.taskId)
     messages.value = data.messages
     taskUsage.value = data.task_usage
+    contextCleared.value = Boolean(data.context_cleared)
+    contextStartSequence.value = data.context_start_sequence ?? null
     if (props.highlightMessageId) void scrollToMessage(props.highlightMessageId)
     emit('usage-updated', data.task_usage)
     await scrollToBottom()
@@ -161,6 +176,26 @@ async function load(): Promise<void> {
     loadError.value = errorMessage(error)
   } finally {
     loading.value = false
+  }
+}
+
+async function toggleContext(): Promise<void> {  if (clearingContext.value) return
+  clearingContext.value = true
+  try {
+    const next = !contextCleared.value
+    const data = await setConversationContext(props.taskId, next)
+    contextCleared.value = data.context_cleared
+    contextStartSequence.value = data.context_start_sequence ?? null
+    app.notify(
+      'success',
+      data.context_cleared
+        ? '已清空上下文：后续请求不会携带此前消息（历史仍保留）'
+        : '已恢复完整上下文',
+    )
+  } catch (error) {
+    app.notifyError(error)
+  } finally {
+    clearingContext.value = false
   }
 }
 
@@ -349,6 +384,28 @@ onBeforeUnmount(() => {
 
     <RunProgress :task-id="taskId" :refresh-key="runRefreshKey" />
 
+    <div
+      v-if="messages.length"
+      class="chat-context"
+      :class="{ 'chat-context--cleared': contextCleared }"
+    >
+      <span class="chat-context__text">
+        {{
+          contextCleared
+            ? '已清空上下文：模型不会读取此前的消息，历史仍可查看。'
+            : '模型会读取本任务的最近对话；消息较多时可清空上下文以减轻 token 压力。'
+        }}
+      </span>
+      <button
+        type="button"
+        class="btn btn--ghost btn--sm"
+        :disabled="clearingContext"
+        @click="toggleContext"
+      >
+        {{ contextCleared ? '恢复完整上下文' : '清空上下文' }}
+      </button>
+    </div>
+
     <div v-if="!hasModel" class="notice notice--warning">
       <AppIcon name="alert" :size="15" />
       <span>尚未配置可用模型：请先在 Settings 中配置 DeepSeek API Key 或启用 Ollama。</span>
@@ -376,16 +433,22 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else class="chat-messages">
-        <article
-          v-for="message in messages"
-          :key="message.id"
-          class="chat-message"
-          :class="[
-            `chat-message--${message.role}`,
-            { 'chat-message--highlight': highlightedMessageId === message.id },
-          ]"
-          :data-message-id="message.id"
-        >
+        <template v-for="(message, index) in messages" :key="message.id">
+          <div
+            v-if="index === contextDividerIndex"
+            class="chat-context-divider"
+            role="separator"
+          >
+            <span>上下文已清空：以上消息模型无法读取</span>
+          </div>
+          <article
+            class="chat-message"
+            :class="[
+              `chat-message--${message.role}`,
+              { 'chat-message--highlight': highlightedMessageId === message.id },
+            ]"
+            :data-message-id="message.id"
+          >
           <details
             v-if="message.role === 'assistant' && message.metadata"
             class="thought-chain"
@@ -449,6 +512,15 @@ onBeforeUnmount(() => {
             <p v-else class="chat-message__text">{{ message.content }}</p>
           </div>
         </article>
+        </template>
+
+        <div
+          v-if="contextDividerIndex === messages.length"
+          class="chat-context-divider"
+          role="separator"
+        >
+          <span>上下文已清空：以上消息模型无法读取，之后的新对话才会进入模型</span>
+        </div>
 
         <article v-if="sending" class="chat-message chat-message--assistant">
           <header class="chat-message__head">
@@ -657,6 +729,45 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   min-height: 420px;
+}
+
+.chat-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chat-context--cleared {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.chat-context__text {
+  line-height: 1.5;
+}
+
+.chat-context-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chat-context-divider::before,
+.chat-context-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .chat-thread {

@@ -14,7 +14,7 @@ def test_builtin_skills_are_seeded(client: TestClient) -> None:
     skills = client.get("/api/v1/skills")
     assert skills.status_code == 200
     names = {item["name"] for item in skills.json()}
-    assert {"多文档分析", "内容摘要"} <= names
+    assert {"多文档分析", "内容摘要", "流程沉淀"} <= names
     assert all(item["is_builtin"] for item in skills.json() if item["name"] in names)
 
 

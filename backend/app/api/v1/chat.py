@@ -23,7 +23,12 @@ from app.modules.conversation.chat_context import (
 )
 from app.modules.conversation.tools import tool_prompt
 from app.modules.conversation.models import Conversation, Message
-from app.modules.conversation.schemas import ChatRequest, TaskMessagesRead
+from app.modules.conversation.schemas import (
+    ChatRequest,
+    ConversationContextRead,
+    ConversationContextUpdate,
+    TaskMessagesRead,
+)
 from app.modules.model import service as model_service
 from app.modules.skill import service as skill_service
 from app.modules.task import service as task_service
@@ -36,7 +41,6 @@ router = APIRouter()
 
 logger = logging.getLogger("mousehole.chat")
 
-HISTORY_LIMIT = 20
 MAX_TOOL_ROUNDS = 4
 
 SYSTEM_PROMPT = (
@@ -49,8 +53,8 @@ SYSTEM_PROMPT = (
 )
 
 
-# Phase 5 H4: two explicit modes instead of a tool on/off switch and keyword
-# heuristics. The model decides whether to call tools in work mode.
+# 阶段 5 H4：用显式的「对话 / 工作」两种模式替代工具开关和关键词猜测。
+# 工作模式下由模型自行决定是否调用工具。
 MODE_CHAT = "chat"
 MODE_WORK = "work"
 
@@ -68,8 +72,8 @@ MODE_WORK_PROMPT = (
     "一律以本轮系统提示为准。"
 )
 
-# Appended *after* history because long conversations full of older "I cannot
-# write files" answers otherwise bias the model into ignoring the tool list.
+# 这段提醒追加在历史消息之后：长对话里旧回答常声称“不能写文件”，
+# 会压过系统提示中的工具说明。
 MODE_WORK_REMINDER = (
     "【工作模式工具提醒】本轮工具已就绪：save_artifact 会把 Markdown 内容真正"
     "保存为当前 Task 的成果（后端落库并生成版本），你不需要也不能直接写本地文件。"
@@ -88,7 +92,7 @@ def _sse(event: str, data: dict) -> str:
 
 
 async def _stream_with_heartbeat(stream) -> AsyncIterator[dict]:
-    """Yield model events, emitting a thinking heartbeat every 2s of silence."""
+    """逐个产出模型事件；模型静默超过 2 秒时发送思考心跳。"""
     iterator = stream.__aiter__()
     pending = asyncio.ensure_future(iterator.__anext__())
     try:
@@ -131,8 +135,8 @@ def _build_messages(
     if mode == MODE_CHAT:
         system = system + "\n\n" + MODE_CHAT_PROMPT
     elif include_tools:
-        # Only the tool pre-pass advertises tools; streaming calls do not pass
-        # a tools= argument, so they must not see tool instructions.
+        # 只有工具 pre-pass 才携带工具说明；最终流式回答没有 tools 参数，
+        # 因此不能让模型看到工具说明。
         system = system + "\n\n" + MODE_WORK_PROMPT + "\n\n" + tool_prompt()
     if skill is not None and skill.system_prompt:
         system = skill.system_prompt + "\n\n" + system
@@ -142,13 +146,13 @@ def _build_messages(
         system = system + "\n\n" + file_context
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
-    for item in history[-HISTORY_LIMIT:]:
+    for item in history:
         if item.role not in ("user", "assistant") or not item.content:
             continue
         message: dict[str, str] = {"role": item.role, "content": item.content}
         if item.role == "assistant" and include_reasoning:
-            # DeepSeek V4 thinking mode requires reasoning_content to be passed
-            # back whenever the request carries tools.
+            # DeepSeek V4 思考模式要求：带工具参数的请求必须回传历史
+            # reasoning_content 字段。
             reasoning = (item.message_metadata or {}).get("reasoning_content")
             if reasoning:
                 message["reasoning_content"] = reasoning
@@ -161,6 +165,28 @@ def _build_messages(
 @router.get("/{task_id}/messages", response_model=TaskMessagesRead)
 def list_messages(task_id: uuid.UUID, db: DbSession) -> TaskMessagesRead:
     return conversation_service.list_task_messages(db, task_id)
+
+
+@router.patch("/{task_id}/messages/context", response_model=ConversationContextRead)
+def update_context(
+    task_id: uuid.UUID,
+    payload: ConversationContextUpdate,
+    db: DbSession,
+) -> ConversationContextRead:
+    """清空或恢复聊天上下文边界。
+
+    消息永不删除；清空只是让旧消息不再发送给模型。
+    """
+    task = task_service.get_task(db, task_id)
+    conversation = conversation_service.set_context_cleared(
+        db, task, cleared=payload.cleared
+    )
+    return ConversationContextRead(
+        task_id=task.id,
+        conversation_id=conversation.id,
+        context_cleared=conversation.context_start_sequence is not None,
+        context_start_sequence=conversation.context_start_sequence,
+    )
 
 
 @router.post("/{task_id}/messages")
@@ -201,9 +227,8 @@ async def send_message(
         "skill": (
             {"id": skill.id, "name": skill.name} if skill is not None else None
         ),
-        # Only surface files the user temporarily introduced in the composer;
-        # project-inherited files stay in the model context but are not shown
-        # as per-message attachments.
+        # 只展示用户在本轮输入框中临时引入的文件；
+        # 项目继承文件仍会进入模型上下文，但不作为本条消息的附件展示。
         "files": (
             [
                 item
@@ -211,7 +236,7 @@ async def send_message(
                 if item.get("source") in ("task_added", "temporary")
             ]
         ),
-        # H4: chat = no tools, work = tools available; recorded for traceability.
+        # H4：对话模式无工具，工作模式有工具；记录模式便于追溯。
         "mode": payload.mode,
     }
     conversation_service.append_message(
@@ -224,13 +249,15 @@ async def send_message(
     db.commit()
 
     history = conversation_repository.list_messages(
-        db, conversation.id, limit=HISTORY_LIMIT
+        db,
+        conversation.id,
+        limit=get_settings().chat_history_limit,
+        min_sequence=conversation.context_start_sequence,
     )
     work_mode = payload.mode == MODE_WORK
-    # DeepSeek V4 thinking mode requires reasoning_content for ALL assistant
-    # turns whenever a request carries tools. Legacy messages may not have it
-    # stored; in that case disable thinking for the tool pre-pass instead of
-    # sending a request that the API rejects with 400.
+    # DeepSeek V4 思考模式：只要请求携带工具参数，所有历史助手消息都必须
+    # 回传 reasoning_content 字段。旧消息可能没有保存该字段；此时对本次
+    # 工具预判关闭思考模式，避免接口返回 400。
     history_missing_reasoning = any(
         item.role == "assistant"
         and not (item.message_metadata or {}).get("reasoning_content")
@@ -286,14 +313,12 @@ async def send_message(
 
         try:
             yield _sse("start", {"provider": provider, "model": model, "mode": payload.mode})
-            # --- controlled tool-calling pre-pass (non-streaming) ---
-            # Work mode always offers tools; the model decides whether to use
-            # them. Chat mode never enters this pre-pass.
+            # --- 受控工具 pre-pass（非流式） ---
+            # 工作模式始终提供工具，由模型决定是否调用；对话模式不会进入这里。
             tools_ok = work_mode
             try:
                 for _round in range(MAX_TOOL_ROUNDS if tools_ok else 0):
-                    # Heartbeats keep the UI informed while the non-streaming
-                    # tool pre-pass is in flight (can take a while on local models).
+                    # 非流式 pre-pass 可能较慢，用 thinking 心跳让界面知道仍在工作。
                     pending = asyncio.create_task(
                         model_service.complete_chat(
                             provider,
@@ -314,9 +339,8 @@ async def send_message(
                     usage = add_usage(usage, result.get("usage")) or usage
                     tool_calls = result.get("tool_calls") or []
                     if not tool_calls:
-                        # Even if the model returned text here, ignore it and
-                        # regenerate as a real SSE stream below. The pre-pass is
-                        # only for deciding/executing tools.
+                    # 即使模型在这里返回了文本也忽略，最终回答统一走真正的 SSE
+                    # 流式生成；工具预判只负责决定/执行工具。
                         break
                     assistant_tool_calls = []
                     parsed_calls: list[tuple[dict, dict]] = []
@@ -336,7 +360,7 @@ async def send_message(
                                 },
                             }
                         )
-                    # OpenAI-compatible order: assistant(tool_calls) BEFORE tool results.
+                    # 兼容 OpenAI 的顺序：assistant(tool_calls) 必须放在 tool 结果之前。
                     assistant_message: dict = {
                         "role": "assistant",
                         "content": result.get("content") or "",
@@ -344,7 +368,7 @@ async def send_message(
                     }
                     reasoning = result.get("reasoning_content")
                     if reasoning:
-                        # Required by DeepSeek V4 thinking mode on the next round.
+                        # DeepSeek V4 思考模式要求下一轮回传。
                         assistant_message["reasoning_content"] = reasoning
                     messages_for_model.append(assistant_message)
                     for call, arguments in parsed_calls:
@@ -389,8 +413,8 @@ async def send_message(
                                 "execution_id": outcome.get("execution_id"),
                             },
                         )
-            except Exception as exc:  # noqa: BLE001 - tools unsupported -> plain streaming
-                # Do not fail the whole chat, but leave a diagnosable trace.
+            except Exception as exc:  # noqa: BLE001 - 工具不可用时降级为普通流式
+                # 不要把整段对话判失败，但要留下可诊断的日志。
                 logger.warning(
                     "tool pre-pass failed; falling back to plain chat (%s): %s",
                     exc.__class__.__name__,
@@ -400,7 +424,7 @@ async def send_message(
                 messages_for_model = list(messages_plain)
 
             async def _clean_answer(target_messages: list[dict]) -> str | None:
-                """Markup-free fallback; only used if streaming leaked tool text."""
+                """去除工具标记的兜底回答；仅在流式结果泄漏工具文本时使用。"""
                 nonlocal usage
                 for _attempt in range(2):
                     outcome = await model_service.complete_chat(
@@ -416,13 +440,11 @@ async def send_message(
                         return candidate
                 return None
 
-            # Final answer is always generated with real streaming. The tool
-            # pre-pass above only decides/executes tools and never supplies the
-            # user-visible answer.
+            # 最终回答始终用真正的流式生成；上面的工具 pre-pass 只负责决定/执行工具，
+            # 不会直接作为用户可见的回答。
             final_messages = list(messages_plain)
             if tool_trace:
-                # Keep only the assistant(tool_calls)/tool(result) messages that
-                # the pre-pass appended after the original conversation.
+                # 只保留 pre-pass 在原始对话之后追加的 assistant(tool_calls)/tool(result) 消息。
                 final_messages.extend(messages_for_model[len(messages_tools):])
                 final_messages.append(
                     {
@@ -449,8 +471,8 @@ async def send_message(
                     yield _sse("thinking", {"phase": "stream"})
                     continue
                 if event["type"] == "reasoning":
-                    # DeepSeek thinking mode chain-of-thought: keep for the next
-                    # tool-carrying request, never render it as the answer.
+                    # DeepSeek 思考模式的思维链：留存给下一次带工具的请求，
+                    # 绝不作为回答渲染。
                     reasoning_chunks.append(event["text"])
                     continue
                 if event["type"] == "delta":
@@ -489,7 +511,7 @@ async def send_message(
             elif not emitted and buffer:
                 chunks.append(buffer)
                 yield _sse("delta", {"text": buffer})
-        except Exception as exc:  # noqa: BLE001 - surface provider errors to the client
+        except Exception as exc:  # noqa: BLE001 - 将 Provider 错误显式返回给客户端
             code = getattr(exc, "code", "provider_error")
             message = getattr(exc, "message", str(exc))
             yield _sse("error", {"code": code, "message": message})
@@ -536,7 +558,7 @@ async def send_message(
                         message_id,
                     )
                 session.commit()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - 保存失败必须显式报错
             yield _sse(
                 "error",
                 {

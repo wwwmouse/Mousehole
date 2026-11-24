@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.file.models import File
@@ -15,6 +15,28 @@ from app.shared.exceptions import ConflictError, NotFoundError
 BUILTIN_IDS: dict[str, uuid.UUID] = {
     "multi_doc_analysis": uuid.UUID("11111111-1111-4111-8111-111111111111"),
     "content_summary": uuid.UUID("22222222-2222-4222-8222-222222222222"),
+    "skill_design": uuid.UUID("33333333-3333-4333-8333-333333333333"),
+}
+
+BUILTIN_DEFINITIONS: dict[str, tuple[str, str, str, str]] = {
+    "multi_doc_analysis": (
+        "多文档分析",
+        "基于 Task 可用文件做结构化分析，产出 Markdown 报告。",
+        "请输出一份结构化的 Markdown 分析报告，包含：概述、关键要点、资料之间的关系或差异、结论与建议、引用的资料清单。只使用提供的资料，引用时标明文件名。",
+        builtin_registry.ANALYSIS_SYSTEM,
+    ),
+    "content_summary": (
+        "内容摘要",
+        "对 Task 可用文件做简洁总结，产出 Markdown 摘要。",
+        "请输出一份 Markdown 总结，包含：一句话结论、核心要点（不超过 8 条）、资料清单。只使用提供的资料，简洁、不编造。",
+        builtin_registry.SUMMARY_SYSTEM,
+    ),
+    "skill_design": (
+        "流程沉淀",
+        "把一次任务或对话提炼成可复制到新建 Skill 界面的 Markdown 技能卡。",
+        builtin_registry.SKILL_DESIGN_INSTRUCTION,
+        builtin_registry.SKILL_DESIGN_SYSTEM,
+    ),
 }
 
 PROMPT_BASE = """## 任务
@@ -36,39 +58,33 @@ class ResolvedSkill:
 
 
 def ensure_builtin_skills(session: Session) -> int:
-    """Seed builtin skills when the Skill Library is empty. Idempotent."""
-    existing = session.scalar(select(func.count()).select_from(Skill)) or 0
-    if existing:
-        return 0
-    definitions = {
-        "multi_doc_analysis": (
-            "多文档分析",
-            "基于 Task 可用文件做结构化分析，产出 Markdown 报告。",
-            "请输出一份结构化的 Markdown 分析报告，包含：概述、关键要点、资料之间的关系或差异、结论与建议、引用的资料清单。只使用提供的资料，引用时标明文件名。",
-        ),
-        "content_summary": (
-            "内容摘要",
-            "对 Task 可用文件做简洁总结，产出 Markdown 摘要。",
-            "请输出一份 Markdown 总结，包含：一句话结论、核心要点（不超过 8 条）、资料清单。只使用提供的资料，简洁、不编造。",
-        ),
+    """Seed any missing builtin skills. Idempotent; never overwrites edits."""
+    existing_codes = {
+        code
+        for code in session.scalars(select(Skill.code).where(Skill.code.is_not(None)))
     }
+    existing_names = set(session.scalars(select(Skill.name)))
     created = 0
-    for code, (name, description, instruction) in definitions.items():
-        skill = Skill(
-            id=BUILTIN_IDS[code],
-            code=code,
-            name=name,
-            description=description,
-            system_prompt=builtin_registry.ANALYSIS_SYSTEM
-            if code == "multi_doc_analysis"
-            else builtin_registry.SUMMARY_SYSTEM,
-            instruction=instruction,
-            output_type="text/markdown",
-            is_builtin=True,
+    for code, (name, description, instruction, system_prompt) in (
+        BUILTIN_DEFINITIONS.items()
+    ):
+        if code in existing_codes or name in existing_names:
+            continue
+        session.add(
+            Skill(
+                id=BUILTIN_IDS[code],
+                code=code,
+                name=name,
+                description=description,
+                system_prompt=system_prompt,
+                instruction=instruction,
+                output_type="text/markdown",
+                is_builtin=True,
+            )
         )
-        session.add(skill)
         created += 1
-    session.commit()
+    if created:
+        session.commit()
     return created
 
 
@@ -118,6 +134,7 @@ BUILTIN_INSTRUCTIONS: dict[str, str] = {
         "请输出一份 Markdown 总结，包含一句话结论、核心要点（不超过 8 条）、"
         "资料清单。只使用提供的资料，简洁、不编造。"
     ),
+    "skill_design": builtin_registry.SKILL_DESIGN_INSTRUCTION,
 }
 
 

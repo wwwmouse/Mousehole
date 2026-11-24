@@ -22,7 +22,11 @@ def create(session: Session, task_id: uuid.UUID) -> Conversation:
 
 
 def list_messages(
-    session: Session, conversation_id: uuid.UUID, *, limit: int = 200
+    session: Session,
+    conversation_id: uuid.UUID,
+    *,
+    limit: int = 200,
+    min_sequence: int | None = None,
 ) -> list[Message]:
     stmt = (
         select(Message)
@@ -30,6 +34,8 @@ def list_messages(
         .order_by(Message.sequence)
         .limit(limit)
     )
+    if min_sequence is not None:
+        stmt = stmt.where(Message.sequence >= min_sequence)
     return list(session.scalars(stmt))
 
 

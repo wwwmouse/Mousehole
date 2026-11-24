@@ -53,6 +53,8 @@ def list_task_messages(session: Session, task_id: uuid.UUID) -> TaskMessagesRead
             conversation_id=None,
             messages=[],
             task_usage=task.usage,
+            context_cleared=False,
+            context_start_sequence=None,
         )
     messages = repository.list_messages(session, conversation.id)
     return TaskMessagesRead(
@@ -60,7 +62,24 @@ def list_task_messages(session: Session, task_id: uuid.UUID) -> TaskMessagesRead
         conversation_id=conversation.id,
         messages=[MessageRead.model_validate(item) for item in messages],
         task_usage=task.usage,
+        context_cleared=conversation.context_start_sequence is not None,
+        context_start_sequence=conversation.context_start_sequence,
     )
+
+
+def set_context_cleared(
+    session: Session, task: Task, *, cleared: bool
+) -> Conversation:
+    conversation = get_or_create_conversation(session, task)
+    if cleared:
+        # Messages with sequence >= boundary are sent; start after current max.
+        boundary = repository.next_sequence(session, conversation.id)
+        conversation.context_start_sequence = boundary
+    else:
+        conversation.context_start_sequence = None
+    session.commit()
+    session.refresh(conversation)
+    return conversation
 
 
 def append_message(

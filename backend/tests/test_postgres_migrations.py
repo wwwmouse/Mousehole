@@ -628,7 +628,13 @@ REQUIRED_COLUMNS = {
     },
     "project_files": {"id", "project_id", "file_id", "added_at"},
     "task_file_overrides": {"id", "task_id", "file_id", "action", "created_at"},
-    "conversations": {"id", "task_id", "created_at", "updated_at"},
+    "conversations": {
+        "id",
+        "task_id",
+        "context_start_sequence",
+        "created_at",
+        "updated_at",
+    },
     "messages": {
         "id",
         "conversation_id",

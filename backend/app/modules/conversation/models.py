@@ -35,6 +35,11 @@ class Conversation(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    # Phase 5 efficiency: when set, Chat only sends messages with
+    # sequence >= context_start_sequence to the model. History is never deleted.
+    context_start_sequence: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
 
 
 class Message(Base):

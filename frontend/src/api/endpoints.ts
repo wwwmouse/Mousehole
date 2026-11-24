@@ -3,6 +3,7 @@ import type {
   Artifact,
   ArtifactSeries,
   ArtifactSeriesDetail,
+  ConversationContext,
   CreateProjectPayload,
   CreateTaskPayload,
   FileContent,
@@ -149,6 +150,16 @@ export function removeTaskFileOverride(taskId: string, fileId: string): Promise<
 
 export function listTaskMessages(taskId: string): Promise<TaskMessages> {
   return request<TaskMessages>(`/tasks/${encodeURIComponent(taskId)}/messages`)
+}
+
+export function setConversationContext(
+  taskId: string,
+  cleared: boolean,
+): Promise<ConversationContext> {
+  return request<ConversationContext>(
+    `/tasks/${encodeURIComponent(taskId)}/messages/context`,
+    { method: 'PATCH', json: { cleared } },
+  )
 }
 
 /* -------------------------------- executions --------------------------------- */

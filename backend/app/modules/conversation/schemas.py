@@ -28,6 +28,19 @@ class TaskMessagesRead(BaseModel):
     conversation_id: uuid.UUID | None
     messages: list[MessageRead]
     task_usage: dict[str, Any] | None
+    context_cleared: bool = False
+    context_start_sequence: int | None = None
+
+
+class ConversationContextRead(BaseModel):
+    task_id: uuid.UUID
+    conversation_id: uuid.UUID
+    context_cleared: bool
+    context_start_sequence: int | None = None
+
+
+class ConversationContextUpdate(BaseModel):
+    cleared: bool
 
 
 class ChatRequest(BaseModel):
