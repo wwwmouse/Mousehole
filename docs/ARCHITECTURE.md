@@ -107,11 +107,13 @@ API 层：`app/api/v1/` 下按资源拆分（workspaces、projects、tasks、tas
 - 预算按模型窗口推导（扣除输出与开销预留），未知模型回退 32k；Workspace 可覆盖。
 - 超预算：分批 + 每批摘要 + 汇总；只对实际参与的文件写快照，并标注 `direct` / `summarized`。
 - Chat 默认读取全文（≤2MB/文件），总预算默认 64k；超预算才截断并提示用 `read_task_file` 分页。
+- `read_task_file` 的可读文件上限与上传上限一致（当前 50MB），单次返回字符数仍受 `MAX_READ_CHARS` 限制；超过 2MB 的文件不会自动进入 Chat 上下文，需模型显式调用工具。
 - Chat 历史按 `context_start_sequence` 截取：清空只把旧消息排除出下一次请求，不删除历史；恢复把边界置空，并按 `CHAT_HISTORY_LIMIT`（默认 80 条消息）取最近记录。
 
 ### 4.4 模型接入
 
 - Provider Adapter：OpenAI 兼容（OpenAI/DeepSeek）、Ollama；统一 `stream_chat` / `complete` 与错误归一化。
+- Ollama 地址来自 `OLLAMA_BASE_URL`：Docker 模式默认 `http://host.docker.internal:11434`，本机直跑 backend 用 `http://127.0.0.1:11434`；已在 `provider_config.json` 保存的地址优先。
 - 配置存 `data/provider_config.json`（明文，不入 Git）；接口只返回掩码；API Key 不写日志。
 - 每次调用记录 usage（Provider 提供时）；Execution 记录模型/参数快照。
 
@@ -191,7 +193,7 @@ pending ──► running ──► completed
 | `backend/app/core/`、`shared/` | 配置、异常、枚举、usage、默认值 |
 | `backend/app/infrastructure/` | SQLAlchemy Base/Session |
 | `backend/alembic/versions/` | 迁移（当前 head `p6q7r8s9t0u1`） |
-| `backend/tests/` | 134 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
+| `backend/tests/` | 135 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
 | `frontend/src/views/` | 页面（TaskView 已拆出 composable，仍偏大） |
 | `frontend/src/components/` | ChatPanel、RunProgress、TaskArtifacts、FilePreviewModal 等 |
 | `frontend/e2e/` | Playwright 核心闭环（Mock API） |

@@ -27,7 +27,7 @@ PROVIDER_DEFINITIONS: dict[str, dict[str, Any]] = {
     },
     "ollama": {
         "kind": "ollama",
-        "base_url": "http://127.0.0.1:11434",
+        "base_url": get_settings().ollama_base_url,
         "default_model": "llama3.2",
         "models": ["llama3.2"],
     },

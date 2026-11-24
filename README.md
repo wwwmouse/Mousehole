@@ -41,6 +41,8 @@ docker compose up -d --build  # 构建镜像并后台启动全部服务
 
 首次使用还需要在 **Settings** 配置 Provider（DeepSeek / OpenAI / Ollama）并点「测试连接」；API Key 保存在本机 `data/provider_config.json`，接口只返回掩码。
 
+> Docker 模式连接宿主机 Ollama 时，地址用 `http://host.docker.internal:11434`；本机直跑 backend 时用 `http://127.0.0.1:11434`。`OLLAMA_BASE_URL` 在 `.env` 中配置。
+
 ### 日常使用（重点）
 
 **第一次启动成功后，以后只需要保证 Docker Desktop 正在运行，然后打开 8090 即可，不用敲任何命令。**

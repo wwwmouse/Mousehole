@@ -6,6 +6,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.modules.conversation import tools as chat_tools
+from app.modules.file.models import File
 from app.modules.task.models import Task
 
 
@@ -48,6 +49,24 @@ def test_read_task_file_accepts_filename(client: TestClient, db_session) -> None
         )
     )
     assert by_id["ok"] is True
+
+
+def test_read_task_file_uses_upload_limit(client: TestClient, db_session) -> None:
+    task_id, file_id = _prepare_task_with_file(client, db_session)
+    task_row = db_session.get(Task, uuid.UUID(task_id))
+    file_row = db_session.get(File, uuid.UUID(file_id))
+    assert file_row is not None
+    # 上传上限当前为 50MB；30MB 的文件应允许工具读取，而不是固定卡在 25MB。
+    file_row.size = 30 * 1024 * 1024
+    db_session.commit()
+
+    result = asyncio.run(
+        chat_tools.execute_tool(
+            db_session, task_row, "read_task_file", {"filename": "notes.md"}
+        )
+    )
+    assert result["ok"] is True
+    assert "important fact 42" in result["content"]
 
 
 def test_read_task_file_supports_paging(client: TestClient, db_session) -> None:

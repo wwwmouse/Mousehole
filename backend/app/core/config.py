@@ -35,6 +35,9 @@ class Settings(BaseSettings):
 
     # 每个 Chat 请求最多携带多少条历史消息（user/assistant 各算一条）。
     chat_history_limit: int = 80
+    # Ollama 地址：Docker 模式应指向宿主机（host.docker.internal），
+    # 本机直接运行 backend 时用 127.0.0.1。
+    ollama_base_url: str = "http://127.0.0.1:11434"
     # --- Phase 5 (H1/H5) runtime knobs -------------------------------------
     # Logging: stdlib level name; sensitive values are filtered by core.logging.
     log_level: str = "INFO"

@@ -10,6 +10,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.modules.artifact import service as artifact_service
 from app.modules.context import service as context_service
 from app.modules.document import service as document_service
@@ -25,7 +26,6 @@ from app.shared.exceptions import AppError, NotFoundError
 
 DEFAULT_READ_CHARS = 12_000
 MAX_READ_CHARS = 40_000
-MAX_TOOL_FILE_BYTES = 25 * 1024 * 1024
 
 
 def _wrap(
@@ -210,10 +210,13 @@ def _read_task_file(session: Session, task: Task, arguments: dict) -> dict:
         names = "、".join(row.filename for _, row in available) or "（无）"
         return _result(False, f"找不到文件「{raw}」；可用文件：{names}")
 
-    if target.size > MAX_TOOL_FILE_BYTES:
+    # 与上传上限保持一致：能上传的文件，就应该允许工具读取。
+    # 注意这只是“可读取”上限，不是一次返回给模型的字符上限。
+    max_tool_file_bytes = get_settings().max_upload_bytes
+    if target.size > max_tool_file_bytes:
         return _result(
             False,
-            f"文件过大（>{MAX_TOOL_FILE_BYTES // (1024 * 1024)}MB），无法在对话中读取；请下载后查看",
+            f"文件过大（>{max_tool_file_bytes // (1024 * 1024)}MB），无法在对话中读取；请下载后查看",
         )
     try:
         offset = max(0, int(arguments.get("offset") or 0))
