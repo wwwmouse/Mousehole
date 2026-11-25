@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — mousehole 系统架构
 
-**文档版本：** v0.3.0  
+**文档版本：** v0.3.0（Phase 6 规划中）  
 **状态：** living（长期维护）  
 **最后更新：** 2026-11-24  
 **定位：** 当前系统的模块边界、依赖方向、关键数据流与扩展点。只写“为什么/边界/扩展点”，字段与目录细节以代码为准。  
@@ -182,6 +182,14 @@ pending ──► running ──► completed
 - **未实现（后置）**：Task 引用 Artifact、`context_manifest`、全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、PromptTemplate、`save_skill`。
 
 边界：不引入 RAG/向量库/embedding、消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
+
+### 8.1 Phase 6 规划（未实现）
+
+- **OCR**：PyMuPDF 渲染 PDF 页图，PaddleOCR 识别；因主后端为 Python 3.14、PaddlePaddle 尚无 cp314 wheel，优先独立 OCR worker（Python 3.12），通过内部接口调用；异步任务 + 页级进度。
+- **页级文本**：`file_pages` 保存 `page_no/text/source/confidence`；扫描版判定后入 OCR 队列。
+- **Citation**：上下文片段编号 `[S1]`，服务端映射 file/page/chunk 并校验；前端跳原始 PDF 页。
+- **检索**：`file_chunks` + jieba 分词 + Postgres FTS；先评测再决定 pgvector hybrid。
+- **非目标**：Office 解析/导出、向量 RAG、版面还原。
 
 ---
 

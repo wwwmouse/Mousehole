@@ -1,6 +1,6 @@
 # DATA_MODEL.md — mousehole 数据模型
 
-**文档版本：** v0.3.0  
+**文档版本：** v0.3.0（Phase 6 规划中）  
 **状态：** living（长期维护）  
 **最后更新：** 2026-11-24  
 **定位：** 核心实体、关系、不变量、删除规则与迁移策略。**字段级定义以 `backend/app/modules/*/models.py` 和 `backend/alembic/versions/` 为准**，本文不复制完整字段表。  
@@ -191,7 +191,64 @@ erDiagram
 
 ---
 
-## 6. 事实源与工程约定
+## 6. Phase 6 规划增量（未实现）
+
+> Phase 6 实施时按本节写 Alembic 迁移；当前尚未落地，勿当成现状。
+
+### 6.1 `file_pages`（页级文本）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | UUID PK | 主键 |
+| file_id | UUID FK files（RESTRICT） | 所属文件 |
+| page_no | Integer | 页码，从 1 开始 |
+| text | Text | 该页提取/OCR 文本 |
+| text_source | VARCHAR | `native` / `ocr` |
+| confidence | Float / Nullable | OCR 平均置信度 |
+| created_at | DateTime | 生成时间 |
+
+约束：UNIQUE(file_id, page_no)；删除 File 前先清理；原文仍只存一份，页文本是派生数据。
+
+### 6.2 `ocr_jobs`（OCR 异步任务）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | UUID PK | 主键 |
+| file_id | UUID FK files（RESTRICT） | 被 OCR 的 PDF |
+| status | VARCHAR | `pending / running / completed / failed / cancelled` |
+| total_pages / processed_pages | Integer | 进度 |
+| error | Text / Nullable | 失败原因 |
+| created_at / started_at / completed_at | DateTime | 时间线 |
+
+规则：同一文件同一时刻只允许一个运行中的 OCR 任务；失败可重试；不阻塞上传与 Chat。
+
+### 6.3 `file_chunks`（检索块，M3）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | UUID PK | 主键 |
+| file_id | UUID FK files（RESTRICT） | 来源文件 |
+| page_start / page_end | Integer | 起止页，供 citation |
+| text | Text | 块文本 |
+| token_count | Integer | 估算 token |
+| search_text | Text | jieba 分词后的检索文本 |
+| search_vector | TSVECTOR / Nullable | GIN 索引 |
+| embedding | Vector / Nullable | pgvector；P3 才引入 |
+
+### 6.4 Citation（先不建独立表）
+
+- Chat 回答的引用先存 `messages.metadata.citations`：
+  `[{file_id, page_no, chunk_id, quote}]`。
+- Artifact 的引用先以内联 Markdown 链接/脚注形式保存；结构化 `artifact_citations` 留到需要 Diff/导出时再评估。
+- 引用由服务端根据上下文编号生成并校验，不接受模型自报的 file_id 作为事实源。
+
+### 6.5 非目标
+
+- Office 解析/导出、pgvector、rerank、表格版面还原。
+
+---
+
+## 7. 事实源与工程约定
 
 - **字段/约束事实源**：`backend/app/modules/*/models.py`；**变更事实源**：`backend/alembic/versions/`（当前 head `p6q7r8s9t0u1`）。
 - 本文只维护：实体关系、业务不变量、删除规则、迁移策略、当前阶段实装变更。
