@@ -187,7 +187,7 @@ erDiagram
 ### 5.5 迁移约定
 
 - 全部增量；每个迁移提供 downgrade；升级前备份。
-- 不引入 pgvector/pg_trgm 作为必需依赖；搜索索引按需评估。
+- 检索索引的具体实现不在数据模型层绑定；按实现阶段评估。
 
 ---
 
@@ -222,18 +222,17 @@ erDiagram
 
 规则：同一文件同一时刻只允许一个运行中的 OCR 任务；失败可重试；不阻塞上传与 Chat。
 
-### 6.3 `file_chunks`（检索块，M3）
+### 6.3 `file_chunks`（检索分片，M3）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | UUID PK | 主键 |
 | file_id | UUID FK files（RESTRICT） | 来源文件 |
 | page_start / page_end | Integer | 起止页，供 citation |
-| text | Text | 块文本 |
+| text | Text | 分片文本 |
 | token_count | Integer | 估算 token |
-| search_text | Text | jieba 分词后的检索文本 |
-| search_vector | TSVECTOR / Nullable | GIN 索引 |
-| embedding | Vector / Nullable | pgvector；P3 才引入 |
+
+规则：分片是“分片 → 索引 → 召回”的稳定输入；索引字段与检索实现待定，本文不绑定具体技术。删除 File 时先清理 chunks。
 
 ### 6.4 Citation（先不建独立表）
 
@@ -244,7 +243,7 @@ erDiagram
 
 ### 6.5 非目标
 
-- Office 解析/导出、pgvector、rerank、表格版面还原。
+- Office 解析/导出、独立重排模型、表格版面还原；RAG 本身是 Phase 6 必交，不在非目标内。
 
 ---
 

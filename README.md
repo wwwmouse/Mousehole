@@ -2,7 +2,7 @@
 
 > 面向个人用户的 **Local-first AI Workspace**：把资料、任务、执行过程和成果沉淀在同一个持续存在的工作空间里。
 
-**状态：v0.3.0 已交付（Phase 5「复用与效率」完成）；Phase 6（v0.4.0「长文档与可信检索」）进行中：OCR、Citation、FTS 检索。** 后续阶段规划见 [演进路线](docs/ROADMAP.md)。
+**状态：v0.3.0 已交付（Phase 5「复用与效率」完成）；Phase 6（v0.4.0「长文档与 RAG」）进行中：OCR、Citation、RAG 检索。** 后续阶段规划见 [演进路线](docs/ROADMAP.md)。
 
 ## 核心闭环
 

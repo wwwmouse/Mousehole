@@ -181,15 +181,15 @@ pending ──► running ──► completed
 - **项目私有文件（交付后补充）**：`POST /api/v1/projects/{id}/files/upload`；`files.owner_project_id` 标记项目私有，上传不进入 Global Library，Task 继承规则不变，移除/删除项目时按引用清理。
 - **未实现（后置）**：Task 引用 Artifact、`context_manifest`、全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、PromptTemplate、`save_skill`。
 
-边界：不引入 RAG/向量库/embedding、消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
+Phase 5 边界：不引入消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
 
 ### 8.1 Phase 6 规划（未实现）
 
 - **OCR**：PyMuPDF 渲染 PDF 页图，PaddleOCR 识别；因主后端为 Python 3.14、PaddlePaddle 尚无 cp314 wheel，优先独立 OCR worker（Python 3.12），通过内部接口调用；异步任务 + 页级进度。
 - **页级文本**：`file_pages` 保存 `page_no/text/source/confidence`；扫描版判定后入 OCR 队列。
 - **Citation**：上下文片段编号 `[S1]`，服务端映射 file/page/chunk 并校验；前端跳原始 PDF 页。
-- **检索**：`file_chunks` + jieba 分词 + Postgres FTS；先评测再决定 pgvector hybrid。
-- **非目标**：Office 解析/导出、向量 RAG、版面还原。
+- **RAG**：预处理侧 **分片 → 索引 → 召回**；提问侧 **重排 → 生成**；具体检索实现与依赖在实现阶段确定，本文不绑定技术。Phase 6 必做，不以单点检索替代。
+- **非目标**：Office 解析/导出、query rewrite、独立重排模型训练、版面还原。
 
 ---
 
@@ -213,7 +213,7 @@ pending ──► running ──► completed
 ## 10. 已知限制（v0.3.0）
 
 - 进程内 Scheduler：单实例；重启后 running 标记 failed，无断点续跑。
-- 无 RAG/向量检索；上下文靠显式预算 + 摘要。
+- RAG 检索尚未实现（Phase 6 进行中）；上下文靠显式预算 + 摘要。
 - 无多用户/权限/协作；无移动端。
 - Execution 仍不是产品概念：无运行卡、上下文查看器、Diff、取消/重跑入口；Artifact 只保留来源字段。
 - 无跨实体搜索、Task/Project 服务端分页、Prompt 模板、`save_skill` 工具。

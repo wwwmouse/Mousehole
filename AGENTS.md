@@ -9,7 +9,7 @@ mousehole 是**面向个人用户的 Local-first AI Workspace**，不是聊天�
 骨架：Workspace → Project → Task → Execution → Artifact；File 提供资料，Conversation 记录交流。
 MVP 只验证一条闭环：建 Project → 传多份文档 → 建 Task → AI 分析 → 存 Markdown Artifact → 重启后仍可复用。
 
-当前状态：**v0.3.0 已交付**（Phase 5「复用与效率」完成）；**Phase 6（v0.4.0「长文档与可信检索」）进行中**：OCR、Citation、FTS 检索。post-MVP 所有阶段的规划、决策、验收与发布记录统一在 `docs/ROADMAP.md`——**一个阶段一个章节，不再新建 Phase 专属文档**。
+当前状态：**v0.3.0 已交付**（Phase 5「复用与效率」完成）；**Phase 6（v0.4.0「长文档与 RAG」）进行中**：OCR、Citation、RAG 检索。post-MVP 所有阶段的规划、决策、验收与发布记录统一在 `docs/ROADMAP.md`——**一个阶段一个章节，不再新建 Phase 专属文档**。
 MVP 期文档（`PRODUCT_SPEC`、`MVP_SPEC`、`TECHNICAL_DECISIONS`、`DEVELOPMENT_PLAN`）已归档冻结在 `docs/archive/mvp/`，只读；`ARCHITECTURE` / `DATA_MODEL` / `UI_GUIDE` 为技术现状文档，可包含已确认但尚未实现的阶段增量（必须标注"未实现"），阶段交付后回填实装补充。
 
 ## 2. 开工前必读（按顺序）
