@@ -1,3 +1,13 @@
+# 模块职责：Execution 状态机与业务入口；所有 Execution 状态变更必须经过本模块。
+# 对外函数：
+# - create_execution(session, *, task, model_provider, model_name, ...)：创建 pending Execution。
+# - transition(session, execution, new_status, *, error_message=None, error_code=None, usage=None)：合法状态迁移。
+# - mark_running / complete / fail / cancel：状态快捷入口；取消不算失败。
+# - open_step(session, execution, *, step_type, name, input_summary=None)：创建执行步骤。
+# - finish_step(session, step, *, status=..., output_summary=None, error_message=None)：结束步骤。
+# - record_file_usage(session, execution, *, file, source_type, usage_mode)：记录文件实际被使用。
+# - recover_interrupted(session)：启动时把残留 running 标记 failed。
+# - list_executions(session, task_id) / get_execution(session, execution_id)：查询。
 from __future__ import annotations
 
 import uuid

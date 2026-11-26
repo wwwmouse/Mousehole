@@ -1,3 +1,7 @@
+# 模块职责：本地 VLM OCR 客户端，通过 OpenAI 兼容 /chat/completions 识别页图。
+# 对外类型：
+# - VlmOcrConfig：base_url/model/api_key/timeout 等配置。
+# - VlmOcrClient：recognize_page(image_png, page_no) 识别单页；支持 close()/with。
 """本地 VLM OCR 客户端（OpenAI 兼容接口）。
 
 默认适配 Ollama：

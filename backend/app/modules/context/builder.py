@@ -1,3 +1,16 @@
+# 模块职责：构建 Execution 的上下文预算、文件文本、分批和摘要输入。
+# 对外函数：
+# - estimate_tokens(text)：按字符数估算 token，用于上下文预算。
+# - compute_budget(workspace, provider, model, max_tokens=None)：计算单次执行可用上下文预算。
+# - collect_file_texts(session, task)：同步读取 Task 可用文件文本（优先 file_pages）。
+# - collect_file_texts_async(session, task, *, timeout_seconds=None)：异步版本，解析放线程池。
+# - collect_skill_asset_texts(session, skill)：读取 Skill 关联资料文本。
+# - collect_skill_asset_texts_async(session, skill, *, timeout_seconds=None)：异步版本。
+# - plan_context(items, budget)：放得下就直接用，放不下则拆批做摘要。
+# - render_context(items)：把文件文本渲染成带文件标题的 Prompt 片段。
+# 对外类型：
+# - FileText：文件 + 来源 + 文本 + 使用方式。
+# - ContextPlan：direct/summarized 模式、上下文文本、批次。
 from __future__ import annotations
 
 import asyncio

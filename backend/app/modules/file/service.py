@@ -1,3 +1,16 @@
+# 模块职责：文件业务：上传、内容寻址、Library、项目私有文件、Task 覆盖和删除保护。
+# 对外函数：
+# - get_file(session, file_id)：读取 active 文件行。
+# - get_file_detail(session, file_id)：读取文件详情（含引用信息）。
+# - get_file_raw(session, file_id)：读取原始字节（只读预览）。
+# - get_file_content(session, file_id, max_chars=20000)：读取文本内容，优先 file_pages。
+# - upload_file(session, upload, *, is_temporary=False, owner_task_id=None, owner_project_id=None)：上传并入库。
+# - create_global_text_file(session, *, filename, content)：把应用内文本写成/复用 Library 文件。
+# - list_files(session, *, search=None, file_type=None, status='active', limit=50, offset=0)：Library 查询。
+# - delete_file(session, file_id)：检查引用后删除文件。
+# - list_task_overrides / apply_task_override / remove_task_override：Task 文件 include/exclude 覆盖。
+# - delete_temporary_file / cleanup_task_temporary_files：临时文件清理。
+# - cleanup_project_private_file / cleanup_project_private_files：项目私有文件清理。
 """File domain service.
 
 Responsibilities (see docs/ARCHITECTURE.md 3.5):

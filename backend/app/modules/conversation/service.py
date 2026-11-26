@@ -1,3 +1,11 @@
+# 模块职责：Conversation/Message 的读写、上下文边界和 Task usage 累计。
+# 对外函数：
+# - last_message_times(session, task_ids)：批量查询每个 Task 最后一条消息时间。
+# - get_or_create_conversation(session, task)：获取或创建 Task 的唯一 Conversation。
+# - list_task_messages(session, task_id)：按 sequence 返回消息列表。
+# - set_context_cleared(session, task, cleared=True)：设置/取消 Chat 上下文分界。
+# - append_message(session, conversation, role=..., content=..., usage=None, metadata=None)：追加一条消息。
+# - bump_task_usage(session, task, usage)：累加 Task 的 token usage。
 from __future__ import annotations
 
 import uuid

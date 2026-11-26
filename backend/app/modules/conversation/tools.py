@@ -1,3 +1,9 @@
+# 模块职责：定义并执行模型可调用的受控工具；工具菜单从 TOOLS_SPECS 动态生成。
+# 对外常量：
+# - TOOL_SPECS：read_task_files / read_task_file / save_artifact / create_execution 的唯一 allowlist。
+# 对外函数：
+# - tool_prompt()：把 TOOL_SPECS 渲染成系统提示里的工具菜单。
+# - execute_tool(session, task, name, arguments, *, conversation_id=None)：按 allowlist 分发并执行一个工具。
 """Controlled tools the chat model may call.
 
 Hard boundaries: no arbitrary filesystem access, no shell, no external writes.

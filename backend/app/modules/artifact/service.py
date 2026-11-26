@@ -1,3 +1,12 @@
+# 模块职责：成果系列/版本、当前版本指针、来源、删除和导出 Library。
+# 对外函数：
+# - get_or_create_series(session, task, title)：获取/创建成果系列。
+# - append_artifact(session, series, *, title, content, ...)：追加新版本，不覆盖历史。
+# - rename_series / set_current_artifact：重命名系列、切换当前版本。
+# - delete_artifact(session, artifact_id)：删除单个版本并移动当前指针。
+# - list_task_series / list_project_series：按 Task/Project 查询系列。
+# - get_series / list_series_artifacts / get_artifact：读取系列/版本。
+# - export_to_library(session, artifact)：把成果 Markdown 导出为普通 Library 文件。
 from __future__ import annotations
 
 import uuid

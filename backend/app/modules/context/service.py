@@ -1,3 +1,11 @@
+# 模块职责：计算 Task 的有效文件上下文，并维护 include/exclude 覆盖。
+# 对外函数：
+# - compute_task_files(session, task)：已有 Task 的 available/excluded 文件及计数。
+# - get_task_files(session, task_id)：按 task_id 获取 Task 文件上下文（API 入口）。
+# - add_task_file(session, task_id, payload)：新增/更新 Task 文件的 include/exclude 覆盖。
+# - remove_task_file(session, task_id, file_id)：删除一条 Task 文件覆盖。
+# 对外类型：
+# - TaskFileMutation：覆盖操作结果（更新后的上下文 + 是否新建）。
 """Context module: compute the file context available to a Task.
 
 Implements the DATA_MODEL 6.3 rule:

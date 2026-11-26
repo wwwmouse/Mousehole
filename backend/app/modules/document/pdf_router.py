@@ -1,3 +1,9 @@
+# 模块职责：统计 PDF 页级图片覆盖率，决定每页走文本层还是 OCR。
+# 对外函数：
+# - inspect_pdf(data, *, threshold=70.0)：返回页数、全文档平均图片覆盖率、逐页 PageStats 和 text/ocr/mixed 路由。
+# 对外类型：
+# - PageStats：单页覆盖率、文本字符数、路由。
+# - PdfInspection：全文档统计与页列表。
 """PDF 路由：用图像覆盖率决定每页走 OCR 还是文本层。
 
 规则（产品约定）：

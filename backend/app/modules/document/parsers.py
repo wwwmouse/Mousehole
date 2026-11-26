@@ -1,3 +1,8 @@
+# 模块职责：各文件格式的纯解析器；只接收 bytes，返回文本，不访问数据库。
+# 对外函数：
+# - parse_pdf(data)：PDF 按页提取文本；PyMuPDF 优先，pypdf 兜底。
+# - parse_text(data)：解码并清理纯文本。
+# - parse_markdown(data)：Markdown 按纯文本处理（不剥离标记）。
 """Document parsers for supported reference formats (PDF/Markdown/TXT plus
 JSON/YAML/CSV/HTML/CSS text assets).
 

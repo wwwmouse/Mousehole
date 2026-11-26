@@ -1,3 +1,7 @@
+# 模块职责：按文件类型分发文本解析，统一抛 FileParseError。
+# 对外函数：
+# - normalize_file_type(file_type)：规范化扩展名（小写、去点）。
+# - extract_text(file_type, data)：读取支持格式的文本；PDF 走 parsers.parse_pdf。
 """Document processing service: dispatch raw file bytes to the right parser."""
 
 from __future__ import annotations

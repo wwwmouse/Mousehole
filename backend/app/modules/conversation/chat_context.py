@@ -1,3 +1,9 @@
+# 模块职责：为 Chat 构建有预算的文件上下文，并收集可引用的文件/页码来源。
+# 对外函数：
+# - build_file_context(session, task, skill=None, extra_file_ids=None, budget_tokens=...)：同步版本（测试/同步调用）。
+# - build_file_context_async(session, task, skill=None, extra_file_ids=None, budget_tokens=..., timeout_seconds=None)：异步版本，解析放线程池。
+# 对外类型：
+# - ChatFileContext：text/files/citations；files 记录文件状态，citations 提供给回答做页码引用。
 """Budgeted Task file context for chat messages.
 
 Chat is not an Execution: we do not run the full pipeline, but the model must

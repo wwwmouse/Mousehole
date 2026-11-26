@@ -1,3 +1,9 @@
+# 模块职责：PDF 页级路由 + 文本/OCR 提取的纯编排服务，不访问数据库。
+# 对外函数：
+# - process_pdf(data, *, filename, threshold=70.0, dpi=200, limit=None, client=None, progress=None)：逐页路由并返回 PdfOcrResult。
+# 对外类型：
+# - OcrPage：单页文本、来源（native/ocr）、置信度。
+# - PdfOcrResult：页列表、路由和统计。
 """PDF OCR 编排层：路由 -> 文本层 / 渲染 -> VLM -> 页级结果。
 
 本模块不依赖数据库、API 或任务队列，先把“路由 + OCR”做成可测试的纯服务；

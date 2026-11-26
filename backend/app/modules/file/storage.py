@@ -1,3 +1,11 @@
+# 模块职责：本地内容寻址文件存储；数据库只保存 storage_key/hash。
+# 对外函数：
+# - get_storage()：获取进程级 LocalFileStorage。
+# - reset_storage()：重置单例（测试/配置切换）。
+# 对外类型：
+# - LocalFileStorage.save(data, extension)：写入并返回 storage_key/hash/size。
+# - LocalFileStorage.read(storage_key)：读取原始字节。
+# - LocalFileStorage.delete/purge(storage_key)：删除或彻底清理对象。
 from __future__ import annotations
 
 import hashlib

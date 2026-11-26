@@ -1,3 +1,8 @@
+# 模块职责：确定性执行流水线：解析文件 → 构建上下文 → 模型 → 生成并保存成果。
+# 对外函数：
+# - run_execution(execution_id, *, session_factory, model_stream=None, cancel_check=None)：执行一个 Execution 并发布事件。
+# 对外类型：
+# - PipelineCancelled：取消检查点抛出的异常。
 from __future__ import annotations
 
 import asyncio

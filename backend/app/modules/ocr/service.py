@@ -1,3 +1,13 @@
+# 模块职责：OCR 任务服务：创建任务、后台逐页处理、进度、页文本和中断恢复。
+# 对外函数：
+# - start_job(session, file_id)：创建并提交页面准备任务。
+# - latest_job(session, file_id)：读取最新任务状态。
+# - page_source_counts(session, file_id)：统计 native/ocr 页数。
+# - list_pages(session, file_id, *, offset=0, limit=50)：分页读取页文本。
+# - get_pages_text(session, file_id)：有页文本时返回按页拼接文本，否则 None；供读取链路优先使用。
+# - run_job(job_id, *, client=None, session_factory=None)：同步执行任务（API 线程/测试）。
+# - recover_interrupted(session)：把上次进程残留的 running 任务标记 failed。
+# - shutdown_worker()：关闭后台线程池。
 """OCR 任务服务：创建任务、后台逐页处理、页级文本读取。"""
 
 from __future__ import annotations

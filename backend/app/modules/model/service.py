@@ -1,3 +1,9 @@
+# 模块职责：模型选择、Provider 配置解析，以及流式/非流式调用入口。
+# 对外函数：
+# - resolve_model(task_provider, task_model, request_provider=None, request_model=None)：解析本轮使用的 provider/model。
+# - stream_chat(provider, model, messages, *, temperature=None, max_tokens=None)：流式聊天。
+# - complete_chat(provider, model, messages, *, tools=None, temperature=None, max_tokens=None, thinking=None)：非流式调用（工具 pre-pass）。
+# - list_models()：列出已配置 provider 的可用模型。
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
