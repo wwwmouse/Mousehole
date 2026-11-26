@@ -2,7 +2,7 @@
 
 **文档版本：** v0.3.0（Phase 6 进行中）  
 **状态：** living（长期维护）  
-**最后更新：** 2026-11-26  
+**最后更新：** 2026-11-27  
 **定位：** 当前系统的整体结构、仓库职责、四层技术边界与模块衔接方式。字段级细节以代码与迁移为准。  
 **相关文档：** `ROADMAP.md`（阶段规划）、`DATA_MODEL.md`（数据不变量）、`UI_GUIDE.md`（界面）、`AGENTS.md`（工程约束）。
 
@@ -273,6 +273,190 @@ GET  /api/v1/files/{file_id}/pages     # 页级文本分页
 ---
 
 ## 5. 核心链路
+
+### 5.0 一条消息的文件级路线图（主干）
+
+**先给结论：**
+
+```text
+前端入口：frontend/src/components/ChatPanel.vue
+         frontend/src/api/chat.ts
+后端入口：backend/app/api/v1/chat.py
+主干文件：backend/app/modules/conversation/chat_turn.py
+```
+
+`chat.py` 只负责 HTTP/SSE，不再负责 Chat 业务。  
+真正决定“一条消息怎么处理”的主干是 `chat_turn.py`。
+
+#### 5.0.1 完整路线图
+
+```text
+浏览器
+  ChatPanel.vue
+    └─ useChatStream.ts
+         └─ api/chat.ts
+              └─ POST /api/v1/tasks/{task_id}/messages
+                   │
+                   ▼
+            api/v1/chat.py: send_message()
+                   │  只做 HTTP/SSE 适配
+                   ▼
+        conversation/chat_turn.py: prepare_chat_turn()
+                   │
+                   ├─ task/service.py
+                   │    读取 Task（项目、模型、温度、最大 token）
+                   │
+                   ├─ model/service.py
+                   │    解析本轮 provider/model
+                   │
+                   ├─ skill/service.py
+                   │    解析本轮 Skill（可选）
+                   │
+                   ├─ conversation/service.py
+                   │    获取/创建 Conversation
+                   │
+                   ├─ workspace/service.py
+                   │    读取 Workspace 上下文预算
+                   │
+                   └─ conversation/chat_context.py
+                        构建本轮文件上下文
+                        │
+                        ├─ context/service.py
+                        │    计算 Task 可用文件
+                        │    （项目继承 + 额外引用 - 排除）
+                        │
+                        ├─ ocr/service.py
+                        │    有 file_pages → 直接取页文本
+                        │
+                        └─ document/service.py
+                             没有页文本 → 解析原文
+                             └─ document/parsers.py
+                                  └─ PyMuPDF（PDF 自动解析，不是工具）
+                   │
+                   ▼
+        chat_turn.prepare_chat_turn() 继续：
+          1. 写入 user Message
+          2. conversation/service.py 读取历史
+          3. chat_prompts.py 组装 system + 历史消息
+          4. tools/tool_prompt() 生成工具菜单
+          5. 返回 ChatTurnPlan
+                   │
+                   ▼
+        api/v1/chat.py: StreamingResponse
+                   │
+                   ▼
+        conversation/chat_turn.py: run_chat_turn(plan)
+                   │
+                   ├─ model/service.py
+                   │    complete_chat()
+                   │    工作模式工具 pre-pass
+                   │
+                   ├─ conversation/tools.py
+                   │    只有模型决定调用时才执行：
+                   │    ├─ read_task_files  → context/service.py
+                   │    ├─ read_task_file   → ocr/document/storage
+                   │    ├─ save_artifact    → artifact/service.py
+                   │    └─ create_execution → execution/service.py
+                   │
+                   ├─ model/service.py
+                   │    stream_chat()
+                   │    最终流式回答
+                   │
+                   ├─ citations.py
+                   │    校验回答里的 [文件名 p.N]
+                   │
+                   └─ conversation/service.py
+                        保存 assistant Message
+                        累加 task usage
+                        artifact/service.py 回填来源
+                   │
+                   ▼
+        ChatTurnEvent（start / thinking / delta / tool_call /
+                       tool_result / done / error）
+                   │
+                   ▼
+        api/v1/chat.py: _sse_events()
+                   │
+                   ▼
+        SSE: event: delta / data: {...}
+                   │
+                   ▼
+        useChatStream.ts → ChatPanel.vue 渲染
+```
+
+#### 5.0.2 各层文件负责什么
+
+| 文件 | 角色 | 一句话 |
+|---|---|---|
+| `frontend/src/components/ChatPanel.vue` | 前端页面 | 收集输入、展示流式回答 |
+| `frontend/src/api/chat.ts` | 前端协议 | 发 POST、解析 SSE |
+| `backend/app/api/v1/chat.py` | HTTP 入口 | 校验参数、返回 SSE |
+| `backend/app/modules/conversation/chat_turn.py` | Chat 主干 | 准备一轮请求并驱动模型/工具/保存 |
+| `backend/app/modules/conversation/chat_prompts.py` | Prompt | 组装 system 提示和历史消息 |
+| `backend/app/modules/conversation/chat_context.py` | 文件上下文 | 选文件、解析、预算截断、citation 来源 |
+| `backend/app/modules/conversation/tools.py` | 工具层 | 受控工具 allowlist 和执行入口 |
+| `backend/app/modules/model/service.py` | 模型层 | 解析 provider、流式/非流式调用 |
+| `backend/app/modules/context/service.py` | 上下文规则 | 计算 Task 可用文件 |
+| `backend/app/modules/ocr/service.py` | 页文本 | 读取 `file_pages` |
+| `backend/app/modules/document/parsers.py` | 解析器 | PDF 用 PyMuPDF，文本用解码器 |
+| `backend/app/modules/artifact/service.py` | 成果 | 保存成果、回填来源 |
+| `backend/app/modules/conversation/service.py` | 会话数据 | 消息、历史、usage |
+| 各模块 `repository.py` | 数据访问 | 拼 SQL、读写数据库 |
+| 各模块 `models.py` | 表结构 | SQLAlchemy 表定义 |
+
+#### 5.0.3 数据形态怎么变化
+
+```text
+HTTP JSON
+  {content, mode, provider, model, file_ids, skill_id}
+        ↓
+ChatRequest（Pydantic DTO）
+        ↓
+Task / Conversation / ChatFileContext / history
+        ↓
+ChatTurnPlan（一轮请求的完整准备结果）
+        ↓
+模型 messages 数组
+        ↓
+ChatTurnEvent（结构化事件）
+        ↓
+SSE 文本帧
+        ↓
+前端消息列表
+        ↓
+Message + metadata 落库
+```
+
+#### 5.0.4 主干和支线
+
+```text
+主干：
+chat.py → chat_turn.py → model/service.py
+
+文件支线：
+chat_turn.py → chat_context.py → ocr/document
+
+工具支线：
+chat_turn.py → tools.py → artifact/execution/context
+
+数据支线：
+各 service.py → repository.py → models.py → PostgreSQL
+```
+
+**如果只想读三个文件：**
+
+1. `backend/app/api/v1/chat.py`：看 HTTP 怎么进、SSE 怎么出；
+2. `backend/app/modules/conversation/chat_turn.py`：看一轮消息的主流程；
+3. `backend/app/modules/conversation/chat_context.py`：看文件怎么被自动读进上下文。
+
+#### 5.0.5 一个容易混淆的点
+
+```text
+PyMuPDF 不是模型工具。
+它在 chat_context.py → document/parsers.py 里自动执行。
+工具链只显示模型主动调用的 read_task_file 等；
+自动注入的文件上下文不会出现在工具列表里。
+```
 
 ### 5.1 Chat（SSE + 受控工具）
 
