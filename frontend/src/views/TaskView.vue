@@ -219,8 +219,9 @@ async function excludeFile(item: TaskAvailableFile): Promise<void> {
   fileActionBusy.value = item.file.id
   try {
     await updateTaskFile(taskId.value, { file_id: item.file.id, action: 'exclude' })
-    app.notify('success', `已排除「${item.file.filename}」`)
+    app.notify('success', `已排除「${item.file.filename}」，可在“已排除”中恢复`)
     await loadFileContext()
+    fileFilter.value = 'excluded'
   } catch (error) {
     app.notifyError(error)
   } finally {
@@ -243,6 +244,7 @@ async function removeOverride(file: FileItem, message: string): Promise<void> {
 
 async function restoreFile(file: FileItem): Promise<void> {
   await removeOverride(file, `已恢复「${file.filename}」`)
+  fileFilter.value = 'all'
 }
 
 async function removeExtraFile(file: FileItem): Promise<void> {

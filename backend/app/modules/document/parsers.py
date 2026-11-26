@@ -52,24 +52,44 @@ def _decode_text(data: bytes) -> str:
 
 
 def parse_pdf(data: bytes) -> str:
-    """Extract text from a PDF, page by page."""
-    try:
-        from pypdf import PdfReader
-    except ImportError as exc:  # pragma: no cover - dependency is in requirements
-        raise FileParseError("缺少 PDF 解析依赖 pypdf") from exc
+    """Extract text from a PDF, page by page.
 
+    PyMuPDF is the primary parser: it handles malformed xref tables and
+    Chinese font encodings better than pypdf for real-world handbooks.
+    pypdf remains a fallback only when PyMuPDF cannot open the file.
+    """
+    pages: list[str] = []
+    page_count = 0
     try:
-        reader = PdfReader(BytesIO(data))
-        pages = [page.extract_text() or "" for page in reader.pages]
-        text = "\n".join(pages).strip()
+        import pymupdf
+
+        doc = pymupdf.open(stream=data, filetype="pdf")
+        try:
+            if doc.needs_pass:
+                raise FileParseError("PDF 已加密，当前不支持带密码读取")
+            page_count = doc.page_count
+            pages = [page.get_text("text") or "" for page in doc]
+        finally:
+            doc.close()
     except FileParseError:
         raise
-    except Exception as exc:  # pypdf raises many exception types for bad input
-        raise FileParseError(f"PDF 解析失败：{exc}") from exc
+    except Exception:
+        # 最后再尝试 pypdf；某些极端文件仍可能只被其中一个库接受。
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(data))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            page_count = len(pages)
+        except FileParseError:
+            raise
+        except Exception as exc:
+            raise FileParseError(f"PDF 解析失败：{exc}") from exc
+
+    text = "\n".join(pages).strip()
 
     # 扫描版/图片型 PDF 通常只有封面等零星文字，正文没有文本层。
     # 明确失败，避免把几百个空白字符当成“解析成功”而让预览/对话一片空白。
-    page_count = len(pages)
     if page_count >= 3 and len(text) < 10 * page_count:
         raise FileParseError(
             f"该 PDF 可能是扫描版/图片型：{page_count} 页仅提取到 {len(text)} 个字符，"

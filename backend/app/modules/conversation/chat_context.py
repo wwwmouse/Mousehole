@@ -32,8 +32,11 @@ from app.shared.exceptions import FileParseError
 # per-file 8k character cap was removed. 64k leaves ample room for system
 # prompt, history and the answer inside the 200k workspace context budget.
 CHAT_FILE_BUDGET_TOKENS = 64_000
-# Parsing very large files synchronously would block the chat request.
-MAX_CHAT_FILE_BYTES = 2 * 1024 * 1024
+# Parsing very large files synchronously would block the chat request.  PDFs
+# are often a few MB even when their extracted text is small, so keep the cap
+# high enough for normal text PDFs; the token budget still truncates content.
+MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024
+MAX_CHAT_FILE_MB = MAX_CHAT_FILE_BYTES // (1024 * 1024)
 
 SOURCE_LABELS = {
     "project_inherited": "项目继承",
@@ -176,7 +179,8 @@ def _render_context(
             files.append(record)
             lines.append(
                 f"### {display}\n"
-                "（文件较大（>2MB），本次对话未自动展开；请下载后查看或使用支持大文件的工具）"
+                f"（文件较大（>{MAX_CHAT_FILE_MB}MB），本次对话未自动展开；"
+                "请下载后查看或使用支持大文件的工具）"
             )
             continue
         try:
