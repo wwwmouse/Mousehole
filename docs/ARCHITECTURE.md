@@ -1,221 +1,404 @@
 # ARCHITECTURE.md — mousehole 系统架构
 
-**文档版本：** v0.3.0（Phase 6 规划中）  
+**文档版本：** v0.3.0（Phase 6 进行中）  
 **状态：** living（长期维护）  
-**最后更新：** 2026-11-24  
-**定位：** 当前系统的模块边界、依赖方向、关键数据流与扩展点。只写“为什么/边界/扩展点”，字段与目录细节以代码为准。  
+**最后更新：** 2026-11-26  
+**定位：** 当前系统的整体结构、仓库职责、四层技术边界与模块衔接方式。字段级细节以代码与迁移为准。  
 **相关文档：** `ROADMAP.md`（阶段规划）、`DATA_MODEL.md`（数据不变量）、`UI_GUIDE.md`（界面）、`AGENTS.md`（工程约束）。
 
 ---
 
 ## 1. 系统定位与不变量
 
-mousehole 是面向个人用户的 **Local-first AI Workspace**，采用**模块化单体**，单用户、本地部署优先，前端只通过 REST + SSE 访问后端。
+mousehole 是面向个人用户的 **Local-first AI Workspace**，采用**模块化单体**：单用户、本地部署优先，前端只通过 REST + SSE 访问后端。
 
 任何阶段都不能破坏的不变量：
 
-1. **分层方向**：`api → service → repository → infrastructure`；模块之间只走公开 Service，Infrastructure 不得反向依赖业务。
+1. **分层方向**：`api → service → repository → infrastructure`；模块之间优先走公开 Service，Infrastructure 不得反向依赖业务。
 2. **Execution 状态唯一来源**：状态只能由 Execution Service 修改；前端只读。
-3. **工具受控**：模型只能调用 `TOOLS_SPEC` allowlist 内的工具（当前 4 个），无 Shell、无任意文件系统、无未经确认的外部写；系统提示中的工具说明从 `TOOLS_SPEC` 动态生成。
+3. **工具受控**：模型只能调用 `TOOLS_SPEC` allowlist 内的工具（当前 4 个），无 Shell、无任意文件系统、无未经确认的外部写。
 4. **成果独立**：Artifact 不依赖 Conversation 存在；新版本不覆盖历史；来源可追溯。
 5. **上下文显式**：可用上下文 ≠ 实际输入；必须按预算构建，禁止无预算拼接全文。
 6. **失败显式**：解析、模型、保存失败必须显式失败并留痕；取消 ≠ 失败。
 
-**单一事实源：** 表结构以 `backend/app/modules/*/models.py` + `alembic/versions/` 为准；API 以 FastAPI 路由/OpenAPI 为准；界面以 `frontend/src` 为准。本文件不复制字段表。
+**单一事实源：** 表结构以 `backend/app/modules/*/models.py` + `backend/alembic/versions/` 为准；API 以 FastAPI 路由/OpenAPI 为准；界面以 `frontend/src` 为准。
 
 ---
 
-## 2. 系统总览
+## 2. 整体架构
+
+### 2.1 运行时拓扑
 
 ```text
-浏览器（Vue 3 + TypeScript）
-   │  REST + SSE
+浏览器（Vue 3 SPA）
+   │  REST + SSE（/api/v1）
    ▼
-Nginx（生产）/ Vite dev server（开发）
-   │  /api 反向代理
+Nginx（生产） / Vite dev server（开发）
+   │  反向代理
    ▼
-FastAPI  app/api/v1（薄层：参数校验 + HTTP/SSE）
+FastAPI（backend/app/api/v1）
    │
-   ▼
-Service 层  app/modules/*/service.py（业务规则、状态流转、事务）
+   ├── Service 层（业务规则/事务）
+   │      ├── Repository → SQLAlchemy → PostgreSQL
+   │      ├── File/Storage → storage/（内容寻址）
+   │      └── Model Adapter → OpenAI / DeepSeek / Ollama
    │
-   ▼
-Repository + Infrastructure（SQLAlchemy / 本地存储 / Provider Adapter）
-   │
-   ▼
-PostgreSQL + storage/ + data/
+   └── OCR 任务线程（进程内）
+          ├── PyMuPDF：PDF 页路由与渲染
+          └── Qwen3-VL（Ollama OpenAI 兼容接口）：页图 OCR
 ```
 
-部署：生产 `docker compose`（Nginx + backend + PostgreSQL）；开发 `docker-compose.dev.yml`（Vite + FastAPI reload + PostgreSQL）。二者共用数据卷与 storage。
+### 2.2 部署形态
+
+- **生产**：`docker compose` 启动 frontend（Nginx）、backend、PostgreSQL。
+- **开发**：`docker-compose.dev.yml` 启动 Vite dev server、FastAPI reload、PostgreSQL。
+- **本地数据**：`data/`（配置）、`storage/`（文件字节）、PostgreSQL 数据卷。
+- **模型**：DeepSeek/OpenAI 走外网；Ollama/Qwen3-VL 跑宿主机，容器通过 `host.docker.internal` 访问。
+- **单实例假设**：进程内 Scheduler、进程内 OCR 任务线程；不做多副本调度。
 
 ---
 
-## 3. 后端模块
+## 3. 仓库地图
 
-| 模块 | 职责 | 关键入口 |
+```text
+mousehole/
+├── backend/                 FastAPI 后端
+│   ├── app/
+│   │   ├── api/v1/           HTTP/SSE 路由（薄层）
+│   │   ├── modules/          领域模块（业务规则）
+│   │   ├── core/             配置、日志
+│   │   ├── shared/           异常、枚举、usage、DB 类型
+│   │   └── infrastructure/   SQLAlchemy Base/Session/模型注册
+│   ├── alembic/              数据库迁移
+│   ├── tests/                pytest
+│   └── requirements.txt
+├── frontend/                Vue 3 前端
+│   ├── src/api/             HTTP/SSE 客户端与 DTO
+│   ├── src/views/           页面
+│   ├── src/components/      组件
+│   ├── src/composables/     流式/执行等组合逻辑
+│   ├── src/stores/          Pinia 跨页状态
+│   ├── src/router/          路由
+│   ├── src/styles/          设计 token 与全局 CSS
+│   ├── src/utils/           格式化、SSE、Markdown、文件类型
+│   ├── tests/unit/          Vitest
+│   └── e2e/                 Playwright
+├── scripts/                 OCR CLI、备份/恢复、测试脚本
+├── docs/                    ROADMAP / ARCHITECTURE / DATA_MODEL / UI_GUIDE
+├── data/                    Provider 配置等本地数据（不入 Git）
+├── storage/                 文件内容寻址存储（不入 Git）
+├── docker-compose*.yml
+├── .env.example             运行环境模板（真实 .env 不入 Git）
+├── README.md
+└── AGENTS.md
+```
+
+---
+
+## 4. 四层架构
+
+### 4.1 前端层（Vue 3 SPA）
+
+**技术栈 / SDK**
+
+| 技术 | 用途 |
+|---|---|
+| Vue 3.5 + TypeScript | 页面与组件 |
+| Vite 6 | 开发/构建 |
+| Vue Router 4 | 页面路由 |
+| Pinia 2 | 跨页共享状态 |
+| 原生 `fetch` | HTTP 请求（未使用 Axios） |
+| 自定义 `utils/sse.ts` | 解析 SSE 帧（Chat/执行） |
+| Vitest 5 + Playwright | 单测与 E2E |
+| 原生 CSS 变量 | 主题与组件样式（不引入组件库） |
+
+**文件位置**
+
+- 页面：`frontend/src/views/`（Home、Tasks、Task、Projects、ProjectDetail、Library、Skills、Settings）
+- 路由：`frontend/src/router/index.ts`
+- 壳层：`frontend/src/components/AppShell.vue`
+- 页面组件：`frontend/src/components/`（ChatPanel、TaskArtifacts、FilePreviewModal、RunProgress 等）
+- API 客户端：`frontend/src/api/client.ts`（base URL、超时、错误归一化）
+- API 方法：`frontend/src/api/endpoints.ts`
+- Chat SSE：`frontend/src/api/chat.ts` + `frontend/src/composables/useChatStream.ts`
+- 执行进度：`frontend/src/composables/useExecutionProgress.ts`
+- 类型：`frontend/src/api/types.ts`
+- 全局状态：`frontend/src/stores/app.ts`
+
+**核心边界**
+
+- 页面不直连数据库/模型供应商，只调用 `api/endpoints.ts`。
+- SSE 断开后重新拉取状态，不把断流直接判定为失败。
+- 组件不写业务规则；纯逻辑放 `utils/` 或 `composables/`。
+
+---
+
+### 4.2 后端层（FastAPI + 模块化单体）
+
+**技术栈 / SDK**
+
+| 技术 | 用途 |
+|---|---|
+| Python 3.14 | 运行时 |
+| FastAPI + Uvicorn | HTTP/SSE 服务 |
+| Pydantic v2 | API DTO 与校验 |
+| SQLAlchemy 2.x（同步） | ORM |
+| Alembic | 迁移 |
+| PostgreSQL + pg8000 | 数据库 |
+| httpx | Provider / Ollama / VLM HTTP 调用（无官方 SDK） |
+| PyMuPDF | PDF 路由、页文本、页图渲染 |
+| pypdf | 旧 PDF 文本提取路径 |
+| python-multipart | 文件上传 |
+| pytest + TestClient | 测试 |
+
+**分层**
+
+```text
+api/v1/*.py
+  ↓ 调用公开 Service
+modules/*/service.py
+  ↓ 调用 Repository / 其他模块公开 Service
+modules/*/repository.py
+  ↓ ORM
+infrastructure/database + modules/*/models.py
+  ↓
+PostgreSQL
+```
+
+**模块职责**
+
+| 模块 | 职责 | 关键文件 |
 |---|---|---|
-| workspace | 单例 Workspace、默认配置（含 context budget 覆盖） | `modules/workspace/service.py` |
+| workspace | 单例 Workspace、默认配置 | `modules/workspace/` |
 | project | Project CRUD、归档、项目文件关联 | `modules/project/` |
-| task | Task CRUD、绑定 Project、删除清理 | `modules/task/` |
-| file | 上传、哈希、存储、Library、引用与删除保护、临时文件 | `modules/file/` |
-| document | PDF/Markdown/TXT/JSON/YAML/CSV/HTML/CSS 文本提取；不支持格式显式报错 | `modules/document/parsers.py` |
-| context | Task 可用文件计算；执行/对话的预算、分批、摘要 | `modules/context/builder.py` |
-| conversation | Conversation/Message、Chat 上下文、SSE、受控工具 pre-pass | `modules/conversation/`、`api/v1/chat.py` |
+| task | Task CRUD、Project 绑定、删除清理 | `modules/task/` |
+| file | 上传、哈希、存储、Library、引用保护、项目私有文件 | `modules/file/` |
+| document | 文本解析、PDF 页级路由、VLM OCR 客户端/编排 | `modules/document/` |
+| ocr | `file_pages` / `ocr_jobs` 持久化与任务执行 | `modules/ocr/` |
+| context | Task 可用文件、预算、分批、摘要 | `modules/context/` |
+| conversation | Conversation/Message、Chat 上下文、受控工具 pre-pass | `modules/conversation/` |
 | model | Provider 配置、模型解析、流式/非流式调用、usage | `modules/model/` |
-| execution | 状态机、进程内 Scheduler、确定性 Pipeline、事件总线、快照 | `modules/execution/` |
-| artifact | ArtifactSeries + 版本、来源、下载/删除 | `modules/artifact/` |
-| skill | 全局 Skill Library、Skill 文件、Task 引用 | `modules/skill/` |
+| execution | 状态机、Scheduler、确定性 Pipeline、快照 | `modules/execution/` |
+| artifact | 成果系列/版本、来源、下载/删除 | `modules/artifact/` |
+| skill | Skill Library、文件附件、Task 引用 | `modules/skill/` |
 | stats | Home 只读统计 | `modules/stats/` |
 
-API 层：`app/api/v1/` 下按资源拆分（workspaces、projects、tasks、task_files、chat、executions、artifacts、files、skills、stats、providers、models、health），路由汇总在 `api/v1/router.py`。
+**核心入口**
+
+- 应用装配：`backend/app/main.py`
+- 配置：`backend/app/core/config.py`
+- 日志/request-id：`backend/app/core/logging.py`
+- 统一异常：`backend/app/shared/exceptions.py`
+- DB Session：`backend/app/infrastructure/database/session.py`
+- 模型注册：`backend/app/infrastructure/database/models.py`
 
 ---
 
-## 4. 关键流程
+### 4.3 API 层（REST + SSE）
 
-### 4.1 Chat（含受控工具）
+**约定**
 
-1. `POST /api/v1/tasks/{id}/messages`（SSE）→ 校验 Task、解析模型与参数、按
-   `conversations.context_start_sequence` 截取历史（清空/恢复只影响 Chat）。
-2. 对话模式不提供工具；工作模式先进入工具 pre-pass（非流式，最多 4 轮），由模型决定是否调用。
-3. 模型可调用 `read_task_files` / `read_task_file` / `save_artifact` / `create_execution`；后端 allowlist 校验并执行，结果回灌。
-4. 最终回答统一走流式生成；期间发送 `thinking` 心跳避免“假死”观感。
-5. 持久化 Message（含 usage、工具步骤、引用文件/Skill 的 metadata）。
-6. 不支持的模型自动回退为普通流式对话；工具失败显式返回错误。
+- 前缀：`/api/v1`
+- 普通接口：JSON；错误统一为：
 
-### 4.2 Execution（确定性 Pipeline）
-
-| 顺序 | 阶段 | 职责 |
-|---|---|---|
-| 1 | resolve_files | 解析 Task 可用文件（继承 + 额外 − 排除） |
-| 2 | parse_documents | 提取文本（含 Skill 资料） |
-| 3 | build_context | 预算、分批、摘要，产出实际输入 |
-| 4 | model_call | 调用模型（网络/超时类错误重试一次） |
-| 5 | generate_artifact | 组织 Markdown 成果 |
-| 6 | save_artifact | 保存 Artifact + 来源 + 快照 |
-| 7 | complete | 更新状态 |
-
-- Scheduler：进程内 FIFO，默认并发 2（`main.py` 注入）；启动时恢复 pending，把僵死 running 标记 failed。
-- 每步写入 `execution_steps`（状态、摘要、时间），并通过 SSE 推送。
-- `execution_file_snapshots` 记录实际参与的文件、直接/摘要模式与内容 hash。
-- 同一 Task 的 Execution 用 `sequence` 递增；重跑产生新 Execution，不覆盖历史。
-
-### 4.3 上下文构建
-
-- 可用文件 = Project 继承文件 ∪ Task 额外引用 − Task 排除；临时文件仅在当前一轮 Chat 生效。
-- **项目私有文件**：`files.is_temporary=true + owner_project_id`；不出现在 Global Library，但属于项目文件，项目内 Task 默认继承；移除项目引用或删除项目时，无引用/无快照的私有文件会被清理。
-- 预算按模型窗口推导（扣除输出与开销预留），未知模型回退 32k；Workspace 可覆盖。
-- 超预算：分批 + 每批摘要 + 汇总；只对实际参与的文件写快照，并标注 `direct` / `summarized`。
-- Chat 默认读取全文（≤2MB/文件），总预算默认 64k；超预算才截断并提示用 `read_task_file` 分页。
-- `read_task_file` 的可读文件上限与上传上限一致（当前 50MB），单次返回字符数仍受 `MAX_READ_CHARS` 限制；超过 2MB 的文件不会自动进入 Chat 上下文，需模型显式调用工具。
-- PDF 用 `pypdf` 提取文本层；多页且文本量极低时显式判定为扫描版/图片型并报错，不把空白当成功。浏览器预览走 `GET /files/{id}/raw` 原始字节，不依赖文本提取；当前不做 OCR。
-- Chat 历史按 `context_start_sequence` 截取：清空只把旧消息排除出下一次请求，不删除历史；恢复把边界置空，并按 `CHAT_HISTORY_LIMIT`（默认 80 条消息）取最近记录。
-
-### 4.4 模型接入
-
-- Provider Adapter：OpenAI 兼容（OpenAI/DeepSeek）、Ollama；统一 `stream_chat` / `complete` 与错误归一化。
-- Ollama 地址来自 `OLLAMA_BASE_URL`：Docker 模式默认 `http://host.docker.internal:11434`，本机直跑 backend 用 `http://127.0.0.1:11434`；已在 `provider_config.json` 保存的地址优先。
-- 配置存 `data/provider_config.json`（明文，不入 Git）；接口只返回掩码；API Key 不写日志。
-- 每次调用记录 usage（Provider 提供时）；Execution 记录模型/参数快照。
-
----
-
-## 5. 状态、失败与恢复
-
-### 5.1 Execution 状态
-
-```text
-pending ──► running ──► completed
-                │
-                ├──► failed
-                └──► cancelled
+```json
+{"error": {"code": "not_found", "message": "文件不存在", "details": null}}
 ```
 
-- `cancelled` 是协作式取消（Pending 直接取消，Running 在检查点停止），**不是失败**。
-- 重启后：pending 重新排队；running 统一标记 failed 并写原因；不实现断点续跑。
-- Artifact 保存失败 → Execution 不得标记 completed。
+- 流式接口：`text/event-stream`（Chat、Execution 进度）
+- 无登录/权限系统；部署边界即安全边界。
+- 请求带 `X-Request-ID`，日志脱敏。
 
-### 5.2 SSE 事件
+**路由文件**
 
-- Chat：`thinking` / `tool_call` / `tool_result` / `delta` / `done` / `error`。
-- Execution：`step.started` / `step.completed` / `step.failed` / 执行终态事件。
-- SSE 断开后，前端重新拉取最新状态，而不是直接判定失败。
-
-### 5.3 错误处理
-
-统一异常类型 + 错误码；用户可见错误与调试日志分离；日志不写 Key、文件全文、Prompt 全文（Phase 5 已补日志脱敏与 request-id）。
-
----
-
-## 6. 安全边界
-
-- 工具只操作**当前 Task** 的可用文件/成果/执行；无任意文件系统、Shell、外部写。
-- 单用户本地部署，无登录/权限系统；部署边界即安全边界。
-- 前端不得直连数据库或模型供应商；所有业务规则在后端。
-- 删除文件/成果前做引用检查（被引用时返回 409），避免破坏历史。
-
----
-
-## 7. 扩展点（加功能先看这里）
-
-| 扩展 | 修改位置 | 注意 |
-|---|---|---|
-| 新 Provider | `model/config.py` + `model/adapters.py` | OpenAI 兼容通常只加配置；新协议才写 Adapter |
-| 新文件解析器 | `document/service.py`、`parsers.py`、`file/service.py` 允许类型、`utils/fileTypes.ts` | 不支持的格式必须显式报错；新依赖需批准 |
-| 新受控工具 | `conversation/tools.py` 的 `TOOL_SPECS` + dispatch + 动态提示 | 同步 Chat 意图判断；不得突破 allowlist |
-| 新 Pipeline 阶段 | `execution/pipeline.py`（阶段顺序硬编码）、`services` | `step_type` 为自由字符串；前端 SSE 通用 |
-| 新 Artifact 类型 | `artifact/models.py` 的 `content_type`/`storage_key` + 下载/预览分支 | 文本类成本低；二进制需改存储与预览 |
-| 新页面 | `frontend/src/router`、`AppShell`、`api/endpoints.ts` | 页面组件不写复杂业务 |
-| 新搜索/索引 | 尚未实现；后续按需新增只读 `search` 模块 | 先 ILIKE/索引，不引入外部搜索引擎 |
-
----
-
-## 8. Phase 5 已实现变更（v0.3.0）
-
-> 阶段规格见 `ROADMAP.md` §3；数据变更见 `DATA_MODEL.md` §5；界面见 `UI_GUIDE.md` §6。
-
-- **成果 → Library**：新增 `POST /api/v1/artifacts/{id}/to-library`，把成果 Markdown 复制为普通 File；内容寻址，重复导出复用同一文件；不新增引用表。
-- **聊天上下文边界**：`conversations.context_start_sequence` + `PATCH /api/v1/tasks/{id}/messages/context`；清空/恢复不删除 Message，只改变送入模型的历史。
-- **流程沉淀 Skill**：内置 `skill_design`，固定输出四段式 Markdown 技能卡；仍由用户复制到新建 Skill，暂未增加 `save_skill` 工具。
-- **工程硬化**：解析线程池 + 超时、日志脱敏与 request-id、Postgres 迁移测试、对话/工作模式、配置化、前端单测。
-- **项目私有文件（交付后补充）**：`POST /api/v1/projects/{id}/files/upload`；`files.owner_project_id` 标记项目私有，上传不进入 Global Library，Task 继承规则不变，移除/删除项目时按引用清理。
-- **未实现（后置）**：Task 引用 Artifact、`context_manifest`、全局 Artifacts 页、运行卡、上下文查看器、Diff、⌘K、PromptTemplate、`save_skill`。
-
-Phase 5 边界：不引入消息队列、多 Agent、多用户；不改变确定性 Pipeline 与 allowlist。
-
-### 8.1 Phase 6 规划（未实现）
-
-- **OCR**：PyMuPDF 渲染 PDF 页图，PaddleOCR 识别；因主后端为 Python 3.14、PaddlePaddle 尚无 cp314 wheel，优先独立 OCR worker（Python 3.12），通过内部接口调用；异步任务 + 页级进度。
-- **页级文本**：`file_pages` 保存 `page_no/text/source/confidence`；扫描版判定后入 OCR 队列。
-- **Citation**：上下文片段编号 `[S1]`，服务端映射 file/page/chunk 并校验；前端跳原始 PDF 页。
-- **RAG**：预处理侧 **分片 → 索引 → 召回**；提问侧 **重排 → 生成**；具体检索实现与依赖在实现阶段确定，本文不绑定技术。Phase 6 必做，不以单点检索替代。
-- **非目标**：Office 解析/导出、query rewrite、独立重排模型训练、版面还原。
-
----
-
-## 9. 代码导航
-
-| 位置 | 内容 |
+| 文件 | 资源 |
 |---|---|
-| `backend/app/api/v1/` | HTTP/SSE 端点（薄层） |
-| `backend/app/modules/` | 12 个业务模块（见 §3） |
-| `backend/app/core/`、`shared/` | 配置、异常、枚举、usage、默认值 |
-| `backend/app/infrastructure/` | SQLAlchemy Base/Session |
-| `backend/alembic/versions/` | 迁移（当前 head `p6q7r8s9t0u1`） |
-| `backend/tests/` | 136 个 pytest（SQLite；另有 59 个 Postgres 标记测试） |
-| `frontend/src/views/` | 页面（TaskView 已拆出 composable，仍偏大） |
-| `frontend/src/components/` | ChatPanel、RunProgress、TaskArtifacts、FilePreviewModal 等 |
-| `frontend/e2e/` | Playwright 核心闭环（Mock API） |
-| `scripts/` | `backup.ps1`、`restore.ps1` |
+| `api/v1/router.py` | 路由汇总 |
+| `api/v1/workspaces.py` | Workspace |
+| `api/v1/projects.py` | Project、项目文件 |
+| `api/v1/tasks.py` | Task |
+| `api/v1/task_files.py` | Task 文件上下文/临时文件 |
+| `api/v1/files.py` | Library 文件、原始字节预览、内容读取 |
+| `api/v1/chat.py` | Chat SSE（含受控工具 pre-pass） |
+| `api/v1/executions.py` | Execution 创建/查询/SSE |
+| `api/v1/artifacts.py` | Artifact/Series、下载、存入 Library |
+| `api/v1/skills.py` | Skill Library |
+| `api/v1/providers.py` | Provider 配置/测试 |
+| `api/v1/models.py` | 可选模型 |
+| `api/v1/stats.py` | Home 统计 |
+| `api/v1/health.py` | 健康检查 |
+| `api/v1/ocr.py` | 页面准备任务、页级文本 |
+
+**Phase 6 OCR API（已实现）**
+
+```http
+POST /api/v1/files/{file_id}/ocr       # 创建页面准备任务
+GET  /api/v1/files/{file_id}/ocr       # 最新任务/进度/摘要
+GET  /api/v1/files/{file_id}/pages     # 页级文本分页
+```
+
+任务响应包含 `current_page / native_pages / ocr_pages / image_coverage / route`，供前端展示“正在读取哪一页”和完成后的思维链总结。
 
 ---
 
-## 10. 已知限制（v0.3.0）
+### 4.4 数据库与存储层
 
-- 进程内 Scheduler：单实例；重启后 running 标记 failed，无断点续跑。
-- RAG 检索尚未实现（Phase 6 进行中）；上下文靠显式预算 + 摘要。
-- 无多用户/权限/协作；无移动端。
-- Execution 仍不是产品概念：无运行卡、上下文查看器、Diff、取消/重跑入口；Artifact 只保留来源字段。
-- 无跨实体搜索、Task/Project 服务端分页、Prompt 模板、`save_skill` 工具。
-- 无全局 Artifacts 页；成果复用走 Library 文件。
-- `TaskView.vue`、`ChatPanel.vue` 仍偏大；前端已有 88 个单测，但复杂交互的覆盖仍有限。
+**技术栈**
+
+- PostgreSQL；UUID 主键；枚举用 VARCHAR + CHECK；时间统一 UTC。
+- SQLAlchemy 2.x 同步 Session；pg8000 驱动。
+- Alembic 迁移；每个迁移提供 downgrade。
+- 文件字节：`storage/` 内容寻址（`storage/objects/...`），数据库只保存 `storage_key`、hash、大小。
+- Provider 配置：`data/provider_config.json`；环境配置：`.env`。
+
+**数据分组**
+
+| 组 | 表 |
+|---|---|
+| 组织 | `workspaces`、`projects`、`tasks` |
+| 文件 | `files`、`project_files`、`task_file_overrides`、`file_pages`、`ocr_jobs` |
+| 对话 | `conversations`、`messages` |
+| 执行 | `executions`、`execution_steps`、`execution_file_snapshots` |
+| 成果 | `artifact_series`、`artifacts` |
+| 能力 | `skills`、`skill_files`、`task_skills` |
+
+**关键规则**
+
+- 一个 Task 一个 Conversation；`context_start_sequence` 只影响 Chat 发送给模型的历史，不删除消息。
+- Artifact 版本只追加；`current_artifact_id` 只是指针。
+- File 只存一份；上传 Library ≠ 所有 Task 可读；项目私有文件 `is_temporary + owner_project_id`。
+- `file_pages` 是 PDF 派生文本；`ocr_jobs` 记录页面准备任务状态。
+- 文档删除/项目删除时按引用规则清理；历史快照仍引用的文件保留。
+
+---
+
+## 5. 核心链路
+
+### 5.1 Chat（SSE + 受控工具）
+
+```text
+ChatPanel
+→ useChatStream
+→ api/chat.ts
+→ POST /tasks/{id}/messages
+→ api/v1/chat.py
+→ conversation service（历史边界、Skill/文件上下文）
+→ work 模式：工具 pre-pass
+   → read_task_files / read_task_file / save_artifact / create_execution
+→ model stream → SSE delta
+→ Message + metadata 落库
+→ done（usage / artifacts / executions）
+```
+
+关键点：
+
+- 对话模式无工具；工作模式工具由模型决定。
+- 历史只取 `context_start_sequence` 之后、最近 `CHAT_HISTORY_LIMIT` 条。
+- 工具失败显式回传，不伪装成功。
+
+### 5.2 Execution（确定性 Pipeline）
+
+```text
+TaskView / RunProgress
+→ POST /tasks/{id}/executions
+→ execution service + scheduler
+→ pipeline:
+   resolve_files → parse_documents → build_context
+   → model_call → generate_artifact → save_artifact → complete
+```
+
+依赖模块：`context`、`document`、`file`、`model`、`artifact`、`skill`、`task`。  
+Execution 状态只由 `execution/service.py` 修改，SSE 只做进度通知。
+
+### 5.3 文件 / 项目 / OCR
+
+```text
+LibraryView / ProjectDetail / FilePreviewModal
+→ /api/v1/files、/api/v1/projects/{id}/files
+→ file service：
+   上传 → 存储 → File 行 → ProjectFile/TaskFileOverride
+   项目私有文件：is_temporary + owner_project_id；不进入 Library
+
+PDF 页准备：
+→ POST /files/{id}/ocr
+→ ocr service：
+   document.pdf_router（页级图像覆盖率）
+   → text 页：PyMuPDF 提取
+   → OCR 页：PyMuPDF 渲染 → vlm_ocr（Qwen3-VL）
+   → file_pages 落库 + ocr_jobs 进度
+→ GET /files/{id}/pages
+→ GET /files/{id}/content 优先返回页文本
+```
+
+### 5.4 Artifact / Skill / Library
+
+```text
+TaskArtifacts
+→ /artifact-series、/artifacts
+→ artifact service（版本、current 指针、来源）
+→ 存入 Library：artifact service → file service（内容寻址复用）
+
+SkillsView / Chat +
+→ skill service（Skill 定义、文件附件、Task 引用）
+```
+
+---
+
+## 6. 模块之间如何衔接
+
+### 6.1 衔接机制
+
+| 机制 | 使用位置 | 说明 |
+|---|---|---|
+| REST DTO | 前端 ↔ API | `frontend/src/api/types.ts` 与 Pydantic schema 对齐 |
+| SSE 事件 | Chat / Execution | 前端解析事件，不把断流当失败 |
+| 公开 Service 调用 | 后端模块之间 | 业务规则只在 Service，API 不跨模块写规则 |
+| Repository + SQLAlchemy | Service → DB | 跨模块查询优先走目标模块公开 Service |
+| 文件存储 | File/OCR/Artifact | 内容寻址，数据库只存 key/hash |
+| JSON metadata | Message / usage | 工具步骤、文件/Skill 引用、usage 等松散扩展数据 |
+| 统一异常 | API ↔ 前端 | `AppError` 映射为错误 envelope |
+| 轮询 | OCR 前端 | `GET /files/{id}/ocr` 获取进度/当前页 |
+
+### 6.2 依赖方向
+
+```text
+api/v1
+  ├── conversation ──→ context / file / skill / artifact / execution / model
+  ├── execution ─────→ context / document / file / model / artifact / skill / task
+  ├── ocr ───────────→ document / file / storage
+  ├── project ───────→ file / task / workspace
+  ├── artifact ──────→ file（导出到 Library）
+  └── task ──────────→ artifact / execution / file / conversation（删除清理）
+```
+
+规则：
+
+- API 只做参数校验、调用 Service、返回 DTO。
+- Service 负责事务、状态机、引用检查。
+- Repository 不跨模块直接互相调用；跨模块业务通过公开 Service。
+- 前端类型与后端 Schema 分开维护，但字段必须一致。
+- 任何新功能先判断属于哪个模块，避免在 API 层堆业务逻辑。
+
+---
+
+## 7. 状态、失败与安全
+
+### 7.1 状态
+
+- Execution：`pending → running → completed / failed / cancelled`；取消 ≠ 失败。
+- OCR Job：`pending → running → completed / failed`；重启后残留任务标记 failed。
+- Artifact：版本只追加；current 指针移动，不覆盖历史。
+
+### 7.2 失败
+
+- 解析失败：显式 `FileParseError`；空文本不伪装成功。
+- 模型失败：`ProviderError`；前端显示错误。
+- 保存失败：不把 Execution 标记 completed。
+- 前端 SSE 断开：重新拉取状态，不直接判定失败。
+
+### 7.3 安全
+
+- 工具只访问当前 Task 的可用文件/成果/执行。
+- 无 Shell、无任意文件系统、无外部写。
+- API Key 只存 `data/provider_config.json`；日志不写 Key/全文/Prompt。
+- 单用户本地部署；无登录/权限系统。
