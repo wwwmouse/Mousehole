@@ -7,6 +7,7 @@ from app.api.v1 import (
     files,
     health,
     models,
+    ocr,
     projects,
     providers,
     skills,
@@ -29,4 +30,5 @@ api_router.include_router(workspaces.router, prefix="/workspaces", tags=["worksp
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(files.router, prefix="/files", tags=["files"])
+api_router.include_router(ocr.router, tags=["ocr"])
 api_router.include_router(task_files.router, prefix="/tasks", tags=["task-files"])

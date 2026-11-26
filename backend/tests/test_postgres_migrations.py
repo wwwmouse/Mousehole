@@ -587,6 +587,8 @@ CORE_TABLES = {
     "skills",
     "skill_files",
     "task_skills",
+    "file_pages",
+    "ocr_jobs",
 }
 
 REQUIRED_COLUMNS = {
@@ -724,6 +726,29 @@ REQUIRED_COLUMNS = {
     },
     "skill_files": {"skill_id", "file_id", "path", "created_at"},
     "task_skills": {"task_id", "skill_id", "created_at"},
+    "file_pages": {
+        "id",
+        "file_id",
+        "page_no",
+        "text",
+        "text_source",
+        "confidence",
+        "created_at",
+    },
+    "ocr_jobs": {
+        "id",
+        "file_id",
+        "status",
+        "route",
+        "total_pages",
+        "processed_pages",
+        "image_coverage",
+        "error",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    },
 }
 
 
@@ -826,6 +851,8 @@ EXPECTED_FOREIGN_KEYS: dict[tuple[str, str], tuple[str, str, str]] = {
     ("task_skills", "skill_id"): ("skills", "id", "CASCADE"),
     ("skill_files", "skill_id"): ("skills", "id", "CASCADE"),
     ("skill_files", "file_id"): ("files", "id", "CASCADE"),
+    ("file_pages", "file_id"): ("files", "id", "CASCADE"),
+    ("ocr_jobs", "file_id"): ("files", "id", "CASCADE"),
 }
 
 _ON_DELETE_LABELS = {
@@ -1372,6 +1399,8 @@ EXPECTED_INDEXES: set[tuple[str, str]] = {
     ("artifacts", "ix_artifacts_series_id"),
     ("artifacts", "ix_artifacts_source_execution_id"),
     ("artifacts", "ix_artifacts_source_message_id"),
+    ("file_pages", "ix_file_pages_file_id"),
+    ("ocr_jobs", "ix_ocr_jobs_file_id"),
 }
 
 

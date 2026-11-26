@@ -18,6 +18,7 @@ from fastapi import APIRouter, Query, Response, UploadFile, status
 from app.api.deps import DbSession
 from app.modules.file import service
 from app.modules.file.schemas import FileContentRead, FileDetail, FileRead
+from app.modules.ocr import service as ocr_service
 
 router = APIRouter()
 
@@ -58,6 +59,15 @@ def get_file_content(
     db: DbSession,
     max_chars: int = Query(default=20000, ge=1),
 ) -> FileContentRead:
+    page_text = ocr_service.get_pages_text(db, file_id)
+    if page_text is not None:
+        file = service.get_file(db, file_id)
+        truncated = len(page_text) > max_chars
+        return FileContentRead(
+            file=FileRead.model_validate(file),
+            text=page_text[:max_chars],
+            truncated=truncated,
+        )
     return service.get_file_content(db, file_id, max_chars=max_chars)
 
 

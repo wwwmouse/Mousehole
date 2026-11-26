@@ -10,6 +10,7 @@ from app.modules.execution.models import (
     ExecutionStep,
 )
 from app.modules.file.models import File, ProjectFile, TaskFileOverride
+from app.modules.ocr.models import FilePage, OcrJob
 from app.modules.project.models import Project
 from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
@@ -23,7 +24,9 @@ __all__ = [
     "ExecutionFileSnapshot",
     "ExecutionStep",
     "File",
+    "FilePage",
     "Message",
+    "OcrJob",
     "Project",
     "ProjectFile",
     "Task",

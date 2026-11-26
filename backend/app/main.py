@@ -18,6 +18,7 @@ from app.modules.execution import repository as execution_repository
 from app.modules.skill import service as skill_service
 from app.modules.execution import service as execution_service
 from app.modules.execution.scheduler import scheduler
+from app.modules.ocr import service as ocr_service
 from app.modules.workspace.service import ensure_default_workspace
 from app.shared.exceptions import AppError
 
@@ -33,9 +34,12 @@ async def lifespan(app: FastAPI):
             ensure_default_workspace(session, settings.default_workspace_name)
             skill_service.ensure_builtin_skills(session)
             recovered = execution_service.recover_interrupted(session)
+            ocr_recovered = ocr_service.recover_interrupted(session)
             pending_ids = execution_repository.list_pending_ids(session)
         if recovered:
             logger.warning("marked %s interrupted execution(s) as failed", recovered)
+        if ocr_recovered:
+            logger.warning("marked %s interrupted OCR job(s) as failed", ocr_recovered)
         scheduler.configure(
             session_factory=get_session_factory(),
             max_concurrency=settings.max_concurrency,
@@ -47,6 +51,7 @@ async def lifespan(app: FastAPI):
         logger.warning("database not ready during startup: %s", exc)
     yield
     await scheduler.shutdown()
+    ocr_service.shutdown_worker()
 
 
 def create_app() -> FastAPI:
