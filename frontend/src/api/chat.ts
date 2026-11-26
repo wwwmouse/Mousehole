@@ -13,6 +13,11 @@ export interface ChatStreamDone {
   tools_enabled: boolean
   artifacts: string[]
   executions: string[]
+  citations?: Array<{
+    file_id: string
+    filename: string
+    page_no: number
+  }>
 }
 
 export interface ChatToolCall {
@@ -130,6 +135,19 @@ export function normaliseChatEvent(
         tools_enabled: Boolean(data.tools_enabled),
         artifacts: asStringArray(data.artifacts),
         executions: asStringArray(data.executions),
+        citations: Array.isArray(data.citations)
+          ? data.citations
+              .filter(
+                (item): item is Record<string, unknown> =>
+                  Boolean(item) && typeof item === 'object',
+              )
+              .map((item) => ({
+                file_id: asString(item.file_id),
+                filename: asString(item.filename),
+                page_no: Number(item.page_no) || 0,
+              }))
+              .filter((item) => item.file_id && item.page_no > 0)
+          : [],
       },
     }
   }

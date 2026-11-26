@@ -19,6 +19,7 @@ from app.modules.execution.scheduler import scheduler
 from app.modules.file import storage as storage_module
 from app.modules.file.models import File
 from app.modules.model import service as model_service
+from app.modules.ocr import service as ocr_service
 from app.modules.skill import service as skill_service
 from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
@@ -228,8 +229,12 @@ def _read_task_file(session: Session, task: Task, arguments: dict) -> dict:
         limit = DEFAULT_READ_CHARS
     limit = max(500, min(limit, MAX_READ_CHARS))
 
-    data = storage_module.get_storage().read(target.storage_key)
-    text = document_service.extract_text(target.file_type, data)
+    page_text = ocr_service.get_pages_text(session, target.id)
+    if page_text is not None:
+        text = page_text
+    else:
+        data = storage_module.get_storage().read(target.storage_key)
+        text = document_service.extract_text(target.file_type, data)
     total = len(text)
     if total == 0:
         return _result(True, f"文件 {target.filename} 没有可读文本", content="")

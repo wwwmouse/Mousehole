@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -19,6 +20,7 @@ from app.modules.conversation import service as conversation_service
 from app.modules.conversation import tools as chat_tools
 from app.modules.conversation.chat_context import (
     CHAT_FILE_BUDGET_TOKENS,
+    ChatFileContext,
     build_file_context_async,
 )
 from app.modules.conversation.tools import tool_prompt
@@ -50,6 +52,13 @@ SYSTEM_PROMPT = (
     "严格只使用资料原文：不要添加资料中不存在的警告、免责声明、隐私提示、"
     "背景信息或数字；如果必须推断，明确标注「推断」。"
     "资料按最近更新时间排序，回答时优先参考最近更新的资料。"
+)
+
+CITATION_PROMPT = (
+    "资料中可能出现「--- 第 N 页 ---」页码标记。"
+    "当回答使用该资料的事实/结论时，在对应句子末尾用 [文件名 p.N] 标注来源，"
+    "例如 [学生手册.pdf p.37]；只能引用本轮资料中真实出现的文件名和页码，"
+    "没有页码依据的事实不要编造引用。"
 )
 
 
@@ -89,6 +98,40 @@ def _looks_like_tool_markup(text: str) -> bool:
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+_CITATION_RE = re.compile(r"\[([^\[\]\n]{1,300}?)\s+p\.(\d+)\]")
+
+
+def _extract_citations(
+    content: str, file_context: ChatFileContext | None
+) -> list[dict]:
+    """只保留上下文真实存在的 [文件名 p.N] 引用。"""
+    if file_context is None or not file_context.citations:
+        return []
+    by_name: dict[str, list[dict]] = {}
+    for source in file_context.citations:
+        filename = str(source.get("filename", ""))
+        by_name.setdefault(filename.casefold(), []).append(source)
+        basename = filename.replace("\\", "/").rsplit("/", 1)[-1]
+        by_name.setdefault(basename.casefold(), []).append(source)
+
+    result: list[dict] = []
+    for match in _CITATION_RE.finditer(content):
+        name = match.group(1).strip().casefold()
+        page_no = int(match.group(2))
+        for source in by_name.get(name, []):
+            if int(source["page_no"]) != page_no:
+                continue
+            citation = {
+                "file_id": source["file_id"],
+                "filename": source["filename"],
+                "page_no": page_no,
+            }
+            if citation not in result:
+                result.append(citation)
+            break
+    return result
 
 
 async def _stream_with_heartbeat(stream) -> AsyncIterator[dict]:
@@ -144,6 +187,8 @@ def _build_messages(
         system = system + "\n\n" + "\n".join(context)
     if file_context:
         system = system + "\n\n" + file_context
+        if "--- 第 " in file_context:
+            system = system + "\n\n" + CITATION_PROMPT
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     for item in history:
@@ -525,6 +570,8 @@ async def send_message(
             )
             return
 
+        citations = _extract_citations(content, file_context)
+
         try:
             with factory() as session:
                 conversation_row = session.get(Conversation, conversation_id)
@@ -545,6 +592,7 @@ async def send_message(
                         "skill": user_metadata.get("skill"),
                         "artifacts": len(created_artifacts),
                         "executions": len(created_executions),
+                        "citations": citations,
                     },
                 )
                 task_usage = conversation_service.bump_task_usage(
@@ -578,6 +626,7 @@ async def send_message(
                 "mode": payload.mode,
                 "artifacts": created_artifacts,
                 "executions": created_executions,
+                "citations": citations,
             },
         )
 

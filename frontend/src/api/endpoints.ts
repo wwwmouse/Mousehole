@@ -9,10 +9,12 @@ import type {
   FileContent,
   FileDetail,
   FileItem,
+  FilePages,
   Execution,
   ExecutionDetail,
   FileListQuery,
   ModelInfo,
+  OcrJob,
   Project,
   ProjectFile,
   ProjectListQuery,
@@ -330,8 +332,29 @@ export function artifactDownloadUrl(artifactId: string): string {
   return `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`
 }
 
-export function fileRawUrl(fileId: string): string {
-  return `/api/v1/files/${encodeURIComponent(fileId)}/raw`
+export function fileRawUrl(fileId: string, page?: number): string {
+  const base = `/api/v1/files/${encodeURIComponent(fileId)}/raw`
+  return page && page > 0 ? `${base}#page=${page}` : base
+}
+
+export function startFileOcr(fileId: string): Promise<OcrJob> {
+  return request<OcrJob>(`/files/${encodeURIComponent(fileId)}/ocr`, {
+    method: 'POST',
+  })
+}
+
+export function getFileOcr(fileId: string): Promise<OcrJob | null> {
+  return request<OcrJob | null>(`/files/${encodeURIComponent(fileId)}/ocr`)
+}
+
+export function listFilePages(
+  fileId: string,
+  offset = 0,
+  limit = 200,
+): Promise<FilePages> {
+  return request<FilePages>(`/files/${encodeURIComponent(fileId)}/pages`, {
+    query: { offset, limit },
+  })
 }
 
 /* ---------------------------------- stats ------------------------------------ */

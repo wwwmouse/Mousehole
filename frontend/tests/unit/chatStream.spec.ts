@@ -110,6 +110,7 @@ describe('normaliseChatEvent', () => {
         tools_enabled: false,
         artifacts: ['a1'],
         executions: [],
+        citations: [],
       },
     })
 

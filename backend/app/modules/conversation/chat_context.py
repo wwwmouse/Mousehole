@@ -12,6 +12,7 @@ document cannot block the event loop / SSE delivery.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from app.modules.context.builder import estimate_tokens
 from app.modules.document import service as document_service
 from app.modules.file import storage as storage_module
 from app.modules.file.models import File
+from app.modules.ocr import service as ocr_service
 from app.modules.skill import service as skill_service
 from app.modules.task.models import Task
 from app.shared.exceptions import FileParseError
@@ -45,11 +47,19 @@ SOURCE_LABELS = {
 class ChatFileContext:
     text: str
     files: list[dict] = field(default_factory=list)
+    citations: list[dict] = field(default_factory=list)
 
 
 def _read_excerpt(storage, file_row: File) -> str:
     data = storage.read(file_row.storage_key)
     return document_service.extract_text(file_row.file_type, data)
+
+
+def _read_text(session: Session, storage, file_row: File) -> str:
+    page_text = ocr_service.get_pages_text(session, file_row.id)
+    if page_text is not None:
+        return page_text
+    return _read_excerpt(storage, file_row)
 
 
 def _collect_entries(
@@ -118,9 +128,11 @@ def _render_context(
     entries: list[tuple[File, str, str | None]],
     budget_tokens: int,
     read_text,
+    page_file_ids: set[str] | None = None,
 ) -> ChatFileContext | None:
     if not entries:
         return None
+    page_file_ids = page_file_ids or set()
 
     lines: list[str] = ["## 当前 Task 可用文件与 Skill 资料"]
     lines.append(
@@ -147,14 +159,19 @@ def _render_context(
 
     used_tokens = 0
     files: list[dict] = []
+    citations: list[dict] = []
     for file_row, source, path in entries:
         display = path or file_row.filename
         record = {
+            "file_id": str(file_row.id),
             "filename": display,
             "source": source,
             "path": path,
         }
-        if file_row.size > MAX_CHAT_FILE_BYTES:
+        if (
+            file_row.size > MAX_CHAT_FILE_BYTES
+            and str(file_row.id) not in page_file_ids
+        ):
             record["status"] = "skipped"
             files.append(record)
             lines.append(
@@ -201,8 +218,21 @@ def _render_context(
             else ""
         )
         lines.append(f"### {display}{suffix}\n{excerpt}")
+        for raw_page in re.findall(r"--- 第 (\d+) 页 ---", excerpt):
+            page_no = int(raw_page)
+            citation = {
+                "file_id": str(file_row.id),
+                "filename": display,
+                "page_no": page_no,
+            }
+            if citation not in citations:
+                citations.append(citation)
 
-    return ChatFileContext(text="\n\n".join(lines), files=files)
+    return ChatFileContext(
+        text="\n\n".join(lines),
+        files=files,
+        citations=citations,
+    )
 
 
 def build_file_context(
@@ -215,12 +245,20 @@ def build_file_context(
     """Synchronous variant (tests, non-async callers)."""
     entries = _collect_entries(session, task, skill, extra_file_ids)
     storage = storage_module.get_storage()
+    page_file_ids = {
+        str(file_row.id)
+        for file_row, _source, _path in entries
+        if ocr_service.get_pages_text(session, file_row.id) is not None
+    }
     return _render_context(
-        entries, budget_tokens, lambda file_row: _read_excerpt(storage, file_row)
+        entries,
+        budget_tokens,
+        lambda file_row: _read_text(session, storage, file_row),
+        page_file_ids,
     )
 
 
-async def _read_excerpt_async(storage, file_row: File, timeout_seconds: float) -> str:
+async def _read_raw_async(storage, file_row: File, timeout_seconds: float) -> str:
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_read_excerpt, storage, file_row),
@@ -247,11 +285,17 @@ async def build_file_context_async(
     entries = _collect_entries(session, task, skill, extra_file_ids)
     storage = storage_module.get_storage()
     parsed: dict[str, str | Exception] = {}
+    page_file_ids: set[str] = set()
     for file_row, _source, _path in entries:
+        page_text = ocr_service.get_pages_text(session, file_row.id)
+        if page_text is not None:
+            parsed[str(file_row.id)] = page_text
+            page_file_ids.add(str(file_row.id))
+            continue
         if file_row.size > MAX_CHAT_FILE_BYTES:
             continue  # render marks it skipped without reading
         try:
-            parsed[str(file_row.id)] = await _read_excerpt_async(
+            parsed[str(file_row.id)] = await _read_raw_async(
                 storage, file_row, timeout
             )
         except Exception as exc:  # noqa: BLE001 - re-raised during render
@@ -265,4 +309,6 @@ async def build_file_context_async(
             raise value
         return value
 
-    return _render_context(entries, budget_tokens, _read)
+    return _render_context(
+        entries, budget_tokens, _read, page_file_ids
+    )

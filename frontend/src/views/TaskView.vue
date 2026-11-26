@@ -75,6 +75,8 @@ const statusUpdating = ref(false)
 
 const pickerOpen = ref(false)
 const previewFile = ref<FileItem | null>(null)
+const citationPreviewId = ref<string | null>(null)
+const citationPreviewPage = ref<number | undefined>(undefined)
 const fileActionBusy = ref<string | null>(null)
 const addingFiles = ref(false)
 
@@ -429,6 +431,11 @@ function onUsageUpdated(usage: TaskUsage | null): void {
   if (task.value) task.value = { ...task.value, usage }
 }
 
+function openCitation(fileId: string, page: number): void {
+  citationPreviewId.value = fileId
+  citationPreviewPage.value = page
+}
+
 async function openSourceMessage(messageId: string): Promise<void> {
   activeTab.value = 'chat'
   highlightMessageId.value = null
@@ -615,6 +622,7 @@ onMounted(() => {
             @usage-updated="onUsageUpdated"
             @task-updated="task = $event"
             @open-artifacts="activeTab = 'artifacts'"
+            @open-citation="openCitation"
             :highlight-message-id="highlightMessageId"
           />
         </div>
@@ -778,6 +786,12 @@ onMounted(() => {
       <FilePreviewModal
         :file-id="previewFile?.id ?? null"
         @close="previewFile = null"
+      />
+
+      <FilePreviewModal
+        :file-id="citationPreviewId"
+        :page="citationPreviewPage"
+        @close="citationPreviewId = null"
       />
 
       <FilePickerModal

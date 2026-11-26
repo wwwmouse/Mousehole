@@ -51,6 +51,7 @@ const emit = defineEmits<{
   'usage-updated': [usage: TaskUsage | null]
   'task-updated': [task: Task]
   'open-artifacts': []
+  'open-citation': [fileId: string, page: number]
 }>()
 
 const app = useAppStore()
@@ -511,6 +512,22 @@ onBeforeUnmount(() => {
             <MarkdownText v-if="message.role === 'assistant'" :text="message.content" />
             <p v-else class="chat-message__text">{{ message.content }}</p>
           </div>
+          <div
+            v-if="message.role === 'assistant' && message.metadata?.citations?.length"
+            class="message-citations"
+          >
+            <span class="message-citations__label">来源</span>
+            <button
+              v-for="(citation, index) in message.metadata.citations"
+              :key="`${citation.file_id}-${citation.page_no}-${index}`"
+              type="button"
+              class="chip chip--citation"
+              :title="`打开 ${citation.filename} 第 ${citation.page_no} 页`"
+              @click="emit('open-citation', citation.file_id, citation.page_no)"
+            >
+              {{ citation.filename }} p.{{ citation.page_no }}
+            </button>
+          </div>
         </article>
         </template>
 
@@ -877,6 +894,33 @@ onBeforeUnmount(() => {
 
 .chat-message__body {
   min-width: 0;
+}
+
+.message-citations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.message-citations__label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.chip--citation {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.chip--citation:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .chat-message__text {

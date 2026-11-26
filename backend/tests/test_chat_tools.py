@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.modules.conversation import tools as chat_tools
 from app.modules.file.models import File
+from app.modules.ocr import repository as ocr_repository
 from app.modules.task.models import Task
 
 
@@ -67,6 +68,30 @@ def test_read_task_file_uses_upload_limit(client: TestClient, db_session) -> Non
     )
     assert result["ok"] is True
     assert "important fact 42" in result["content"]
+
+
+def test_read_task_file_prefers_page_text(
+    client: TestClient, db_session
+) -> None:
+    task_id, file_id = _prepare_task_with_file(client, db_session)
+    task_row = db_session.get(Task, uuid.UUID(task_id))
+    ocr_repository.add_page(
+        db_session,
+        file_id=uuid.UUID(file_id),
+        page_no=1,
+        text="这是 OCR 页文本",
+        text_source="ocr",
+    )
+    db_session.commit()
+
+    result = asyncio.run(
+        chat_tools.execute_tool(
+            db_session, task_row, "read_task_file", {"file_id": file_id}
+        )
+    )
+    assert result["ok"] is True
+    assert "第 1 页" in result["content"]
+    assert "这是 OCR 页文本" in result["content"]
 
 
 def test_read_task_file_supports_paging(client: TestClient, db_session) -> None:

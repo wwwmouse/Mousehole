@@ -199,6 +199,45 @@ export interface ChatMessageMetadata {
   duration_ms?: number
   artifacts?: number
   executions?: number
+  citations?: Citation[]
+}
+
+export interface Citation {
+  file_id: string
+  filename: string
+  page_no: number
+}
+
+export interface OcrJob {
+  id: string
+  file_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  route: 'text' | 'ocr' | 'mixed'
+  total_pages: number
+  processed_pages: number
+  image_coverage: number
+  error: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  current_page: number | null
+  native_pages: number
+  ocr_pages: number
+}
+
+export interface FilePage {
+  page_no: number
+  text: string
+  text_source: 'native' | 'ocr'
+  confidence: number | null
+}
+
+export interface FilePages {
+  file_id: string
+  total: number
+  offset: number
+  limit: number
+  pages: FilePage[]
 }
 
 export interface ChatMessage {

@@ -9,6 +9,7 @@ from app.modules.context import service as context_service
 from app.modules.document import service as document_service
 from app.modules.file.models import File
 from app.modules.file.storage import get_storage
+from app.modules.ocr import service as ocr_service
 from app.modules.task.models import Task
 from app.modules.workspace.models import Workspace
 from app.shared.exceptions import FileParseError
@@ -69,14 +70,20 @@ def collect_file_texts(session, task: Task) -> list[FileText]:
         file_row = session.get(File, entry.file.id)
         if file_row is None:
             continue
-        data = storage.read(file_row.storage_key)
-        try:
-            text = document_service.extract_text(file_row.file_type, data)
-        except FileParseError as exc:
-            raise FileParseError(
-                f"文件解析失败：{file_row.filename}（{exc.message}）",
-                details={"filename": file_row.filename},
-            ) from exc
+        page_text = ocr_service.get_pages_text(session, file_row.id)
+        if page_text is not None:
+            text = page_text
+        else:
+            data = storage.read(file_row.storage_key)
+            try:
+                text = document_service.extract_text(
+                    file_row.file_type, data
+                )
+            except FileParseError as exc:
+                raise FileParseError(
+                    f"文件解析失败：{file_row.filename}（{exc.message}）",
+                    details={"filename": file_row.filename},
+                ) from exc
         texts.append(
             FileText(file=file_row, source_type=entry.source, text=text)
         )
@@ -123,8 +130,15 @@ async def collect_file_texts_async(
         file_row = session.get(File, entry.file.id)
         if file_row is None:
             continue
+        page_text = ocr_service.get_pages_text(session, file_row.id)
         try:
-            text = await _extract_text_async(file_row, timeout_seconds)
+            text = (
+                page_text
+                if page_text is not None
+                else await _extract_text_async(
+                    file_row, timeout_seconds
+                )
+            )
         except FileParseError as exc:
             raise FileParseError(
                 f"文件解析失败：{file_row.filename}（{exc.message}）",
