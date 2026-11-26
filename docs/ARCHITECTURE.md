@@ -176,7 +176,7 @@ PostgreSQL
 | document | 文本解析、PDF 页级路由、VLM OCR 客户端/编排 | `modules/document/` |
 | ocr | `file_pages` / `ocr_jobs` 持久化与任务执行 | `modules/ocr/` |
 | context | Task 可用文件、预算、分批、摘要 | `modules/context/` |
-| conversation | Conversation/Message、Chat 上下文、受控工具 pre-pass | `modules/conversation/` |
+| conversation | Conversation/Message、Chat 上下文、受控工具、一轮对话编排 | `modules/conversation/` |
 | model | Provider 配置、模型解析、流式/非流式调用、usage | `modules/model/` |
 | execution | 状态机、Scheduler、确定性 Pipeline、快照 | `modules/execution/` |
 | artifact | 成果系列/版本、来源、下载/删除 | `modules/artifact/` |
@@ -219,7 +219,7 @@ PostgreSQL
 | `api/v1/tasks.py` | Task |
 | `api/v1/task_files.py` | Task 文件上下文/临时文件 |
 | `api/v1/files.py` | Library 文件、原始字节预览、内容读取 |
-| `api/v1/chat.py` | Chat SSE（含受控工具 pre-pass） |
+| `api/v1/chat.py` | Chat HTTP/SSE 适配（编排在 `modules/conversation/chat_turn.py`） |
 | `api/v1/executions.py` | Execution 创建/查询/SSE |
 | `api/v1/artifacts.py` | Artifact/Series、下载、存入 Library |
 | `api/v1/skills.py` | Skill Library |
@@ -281,11 +281,13 @@ ChatPanel
 → useChatStream
 → api/chat.ts
 → POST /tasks/{id}/messages
-→ api/v1/chat.py
+→ api/v1/chat.py（HTTP/SSE 适配）
+→ conversation.chat_turn（一轮编排）
 → conversation service（历史边界、Skill/文件上下文）
 → work 模式：工具 pre-pass
    → read_task_files / read_task_file / save_artifact / create_execution
-→ model stream → SSE delta
+→ model stream → 结构化事件
+→ chat.py 转 SSE delta
 → Message + metadata 落库
 → done（usage / artifacts / executions）
 ```

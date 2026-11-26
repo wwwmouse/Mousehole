@@ -325,7 +325,7 @@ def test_chat_includes_available_files_in_context(
 def test_stream_heartbeat_emits_thinking() -> None:
     import asyncio
 
-    from app.api.v1.chat import _stream_with_heartbeat
+    from app.modules.conversation.chat_turn import _stream_with_heartbeat
 
     async def slow_stream():
         await asyncio.sleep(2.2)

@@ -1,5 +1,6 @@
 # 模块职责：成果系列/版本、当前版本指针、来源、删除和导出 Library。
 # 对外函数：
+# - attach_source_message(session, artifact_ids, message_id)：把成果来源回填到生成它的消息。
 # - get_or_create_series(session, task, title)：获取/创建成果系列。
 # - append_artifact(session, series, *, title, content, ...)：追加新版本，不覆盖历史。
 # - rename_series / set_current_artifact：重命名系列、切换当前版本。
@@ -19,6 +20,15 @@ from app.modules.file import service as file_service
 from app.modules.file.schemas import FileRead
 from app.modules.task.models import Task
 from app.shared.exceptions import ConflictError, NotFoundError, UnprocessableError
+
+
+def attach_source_message(
+    session: Session,
+    artifact_ids: list[uuid.UUID],
+    message_id: uuid.UUID,
+) -> None:
+    """把成果来源回填到生成它的 assistant message。"""
+    repository.update_source_message(session, artifact_ids, message_id)
 
 
 def get_or_create_series(session: Session, task: Task, title: str) -> ArtifactSeries:

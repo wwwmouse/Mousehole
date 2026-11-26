@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.api.v1.chat import _build_messages
+from app.modules.conversation.chat_prompts import build_messages
 from app.modules.conversation.schemas import ChatRequest
 from app.modules.model import service as model_service
 
@@ -15,7 +15,7 @@ def _fake_task() -> SimpleNamespace:
 
 
 def test_chat_mode_system_prompt_explains_no_tools() -> None:
-    messages = _build_messages(_fake_task(), [], mode="chat")
+    messages = build_messages(_fake_task(), [], mode="chat")
     system = messages[0]["content"]
     assert "对话模式" in system
     assert "save_artifact" not in system
@@ -23,7 +23,7 @@ def test_chat_mode_system_prompt_explains_no_tools() -> None:
 
 
 def test_work_mode_system_prompt_lists_all_tools() -> None:
-    messages = _build_messages(_fake_task(), [], include_tools=True, mode="work")
+    messages = build_messages(_fake_task(), [], include_tools=True, mode="work")
     system = messages[0]["content"]
     assert "工作模式" in system
     for name in ("read_task_files", "read_task_file", "save_artifact", "create_execution"):
@@ -34,7 +34,7 @@ def test_work_mode_system_prompt_lists_all_tools() -> None:
 
 
 def test_chat_mode_has_no_work_mode_tool_reminder() -> None:
-    messages = _build_messages(_fake_task(), [], mode="chat")
+    messages = build_messages(_fake_task(), [], mode="chat")
     assert all("工作模式工具提醒" not in message["content"] for message in messages)
 
 
@@ -47,7 +47,7 @@ def test_tool_history_includes_reasoning_content_when_available() -> None:
         ),
         SimpleNamespace(role="user", content="next", message_metadata=None),
     ]
-    with_reasoning = _build_messages(
+    with_reasoning = build_messages(
         _fake_task(),
         history,
         include_tools=True,
@@ -56,7 +56,7 @@ def test_tool_history_includes_reasoning_content_when_available() -> None:
     )
     assert with_reasoning[1]["reasoning_content"] == "previous chain of thought"
 
-    without_reasoning = _build_messages(
+    without_reasoning = build_messages(
         _fake_task(),
         history,
         include_tools=True,

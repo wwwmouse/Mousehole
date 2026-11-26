@@ -2,6 +2,8 @@
 # 对外函数：
 # - last_message_times(session, task_ids)：批量查询每个 Task 最后一条消息时间。
 # - get_or_create_conversation(session, task)：获取或创建 Task 的唯一 Conversation。
+# - get_conversation(session, conversation_id)：按 ID 读取 Conversation（不存在则报错）。
+# - list_recent_messages(session, conversation_id, *, limit=200, min_sequence=None)：读取 Chat 历史窗口。
 # - list_task_messages(session, task_id)：按 sequence 返回消息列表。
 # - set_context_cleared(session, task, cleared=True)：设置/取消 Chat 上下文分界。
 # - append_message(session, conversation, role=..., content=..., usage=None, metadata=None)：追加一条消息。
@@ -22,6 +24,7 @@ from app.modules.conversation.schemas import (
 )
 from app.modules.task import service as task_service
 from app.modules.task.models import Task
+from app.shared.exceptions import NotFoundError
 from app.shared.usage import add_usage
 
 
@@ -50,6 +53,33 @@ def get_or_create_conversation(session: Session, task: Task) -> Conversation:
         session.commit()
         session.refresh(conversation)
     return conversation
+
+
+def get_conversation(
+    session: Session, conversation_id: uuid.UUID
+) -> Conversation:
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise NotFoundError(
+            "对话不存在", details={"conversation_id": str(conversation_id)}
+        )
+    return conversation
+
+
+def list_recent_messages(
+    session: Session,
+    conversation_id: uuid.UUID,
+    *,
+    limit: int = 200,
+    min_sequence: int | None = None,
+) -> list[Message]:
+    """读取 Chat 发送给模型的历史窗口（包含指定边界之后的最近消息）。"""
+    return repository.list_messages(
+        session,
+        conversation_id,
+        limit=limit,
+        min_sequence=min_sequence,
+    )
 
 
 def list_task_messages(session: Session, task_id: uuid.UUID) -> TaskMessagesRead:
