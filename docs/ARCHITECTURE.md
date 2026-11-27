@@ -16,7 +16,7 @@ mousehole 是面向个人用户的 **Local-first AI Workspace**，采用**模块
 
 1. **分层方向**：`api → service → repository → infrastructure`；模块之间优先走公开 Service，Infrastructure 不得反向依赖业务。
 2. **Execution 状态唯一来源**：状态只能由 Execution Service 修改；前端只读。
-3. **工具受控**：模型只能调用 `TOOLS_SPEC` allowlist 内的工具（当前 4 个），无 Shell、无任意文件系统、无未经确认的外部写。
+3. **工具受控**：模型只能调用 `TOOLS_SPEC` allowlist 内的工具，无 Shell、无任意文件系统、无未经确认的外部写。
 4. **成果独立**：Artifact 不依赖 Conversation 存在；新版本不覆盖历史；来源可追溯。
 5. **上下文显式**：可用上下文 ≠ 实际输入；必须按预算构建，禁止无预算拼接全文。
 6. **失败显式**：解析、模型、保存失败必须显式失败并留痕；取消 ≠ 失败。
@@ -60,38 +60,81 @@ FastAPI（backend/app/api/v1）
 
 ## 3. 仓库地图
 
+### 3.1 顶层结构
+
 ```text
 mousehole/
 ├── backend/                 FastAPI 后端
 │   ├── app/
-│   │   ├── api/v1/           HTTP/SSE 路由（薄层）
-│   │   ├── modules/          领域模块（业务规则）
+│   │   ├── api/v1/           HTTP/SSE 路由
+│   │   ├── modules/          业务能力模块
 │   │   ├── core/             配置、日志
 │   │   ├── shared/           异常、枚举、usage、DB 类型
 │   │   └── infrastructure/   SQLAlchemy Base/Session/模型注册
 │   ├── alembic/              数据库迁移
-│   ├── tests/                pytest
-│   └── requirements.txt
+│   └── tests/                pytest
 ├── frontend/                Vue 3 前端
 │   ├── src/api/             HTTP/SSE 客户端与 DTO
+│   ├── src/components/      核心页面组件
 │   ├── src/views/           页面
-│   ├── src/components/      组件
-│   ├── src/composables/     流式/执行等组合逻辑
+│   ├── src/composables/     流式/执行状态
 │   ├── src/stores/          Pinia 跨页状态
 │   ├── src/router/          路由
-│   ├── src/styles/          设计 token 与全局 CSS
-│   ├── src/utils/           格式化、SSE、Markdown、文件类型
-│   ├── tests/unit/          Vitest
-│   └── e2e/                 Playwright
+│   ├── src/utils/           SSE、格式化、文件类型
+│   └── src/styles/          设计 token 与全局 CSS
 ├── scripts/                 OCR CLI、备份/恢复、测试脚本
 ├── docs/                    ROADMAP / ARCHITECTURE / DATA_MODEL / UI_GUIDE
 ├── data/                    Provider 配置等本地数据（不入 Git）
 ├── storage/                 文件内容寻址存储（不入 Git）
 ├── docker-compose*.yml
-├── .env.example             运行环境模板（真实 .env 不入 Git）
+├── .env.example
 ├── README.md
 └── AGENTS.md
 ```
+
+### 3.2 前端核心模块
+
+```text
+frontend/src/
+├── api/            HTTP/SSE 客户端与 DTO（client/chat/endpoints/types）
+├── composables/    Chat 流、Execution 进度
+├── components/     ChatPanel / FilePreviewModal / TaskArtifacts / RunProgress
+├── views/          TaskView / LibraryView / ProjectDetailView
+├── stores/         app.ts
+└── utils/          sse.ts
+```
+
+### 3.3 后端 API 核心路由
+
+```text
+backend/app/api/v1/
+├── chat.py          Chat HTTP/SSE
+├── ocr.py           OCR / 页文本
+├── files.py         文件 / Library
+├── executions.py    Execution 创建/查询/SSE
+├── tasks.py         Task CRUD
+├── task_files.py    Task 可用文件
+├── projects.py      Project / 项目文件
+├── artifacts.py     成果系列/版本/导出
+└── supporting       skills / providers / models / stats / health
+```
+
+### 3.4 后端 modules 核心模块
+
+```text
+backend/app/modules/
+├── conversation/    Chat 主干（chat_turn/chat_context/chat_prompts/tools）
+├── context/         Task 可用文件与预算（service/builder）
+├── document/        PDF/文本解析（service/parsers/pdf_router/ocr_service/vlm_ocr）
+├── ocr/             页文本与任务（service）
+├── file/            文件与存储（service/storage）
+├── model/           Provider 与模型（service/adapters）
+├── execution/       状态机与流水线（service/pipeline/scheduler）
+├── artifact/        成果系列/版本（service）
+└── supporting       task / project / skill / workspace / stats
+```
+
+> 只给核心模块加注释；内部文件不逐行解释。`models.py` / `repository.py` / `schemas.py` 分别负责表结构、数据库查询、API DTO，跨模块优先调用 `service.py`。
 
 ---
 
@@ -274,7 +317,7 @@ GET  /api/v1/files/{file_id}/pages     # 页级文本分页
 
 ## 5. 核心链路
 
-### 5.0 一条消息的文件级路线图（主干）
+### 5.1 运行逻辑总图（入口与分支）
 
 **先给结论：**
 
@@ -288,123 +331,156 @@ GET  /api/v1/files/{file_id}/pages     # 页级文本分页
 `chat.py` 只负责 HTTP/SSE，不再负责 Chat 业务。  
 真正决定“一条消息怎么处理”的主干是 `chat_turn.py`。
 
-#### 5.0.1 完整路线图
+#### 5.1.1 运行逻辑总图（含分支）
 
-```text
-浏览器
-  ChatPanel.vue
-    └─ useChatStream.ts
-         └─ api/chat.ts
-              └─ POST /api/v1/tasks/{task_id}/messages
-                   │
-                   ▼
-            api/v1/chat.py: send_message()
-                   │  只做 HTTP/SSE 适配
-                   ▼
-        conversation/chat_turn.py: prepare_chat_turn()
-                   │
-                   ├─ task/service.py
-                   │    读取 Task（项目、模型、温度、最大 token）
-                   │
-                   ├─ model/service.py
-                   │    解析本轮 provider/model
-                   │
-                   ├─ skill/service.py
-                   │    解析本轮 Skill（可选）
-                   │
-                   ├─ conversation/service.py
-                   │    获取/创建 Conversation
-                   │
-                   ├─ workspace/service.py
-                   │    读取 Workspace 上下文预算
-                   │
-                   └─ conversation/chat_context.py
-                        构建本轮文件上下文
-                        │
-                        ├─ context/service.py
-                        │    计算 Task 可用文件
-                        │    （项目继承 + 额外引用 - 排除）
-                        │
-                        ├─ ocr/service.py
-                        │    有 file_pages → 直接取页文本
-                        │
-                        └─ document/service.py
-                             没有页文本 → 解析原文
-                             └─ document/parsers.py
-                                  └─ PyMuPDF（PDF 自动解析，不是工具）
-                   │
-                   ▼
-        chat_turn.prepare_chat_turn() 继续：
-          1. 写入 user Message
-          2. conversation/service.py 读取历史
-          3. chat_prompts.py 组装 system + 历史消息
-          4. tools/tool_prompt() 生成工具菜单
-          5. 返回 ChatTurnPlan
-                   │
-                   ▼
-        api/v1/chat.py: StreamingResponse
-                   │
-                   ▼
-        conversation/chat_turn.py: run_chat_turn(plan)
-                   │
-                   ├─ model/service.py
-                   │    complete_chat()
-                   │    工作模式工具 pre-pass
-                   │
-                   ├─ conversation/tools.py
-                   │    只有模型决定调用时才执行：
-                   │    ├─ read_task_files  → context/service.py
-                   │    ├─ read_task_file   → ocr/document/storage
-                   │    ├─ save_artifact    → artifact/service.py
-                   │    └─ create_execution → execution/service.py
-                   │
-                   ├─ model/service.py
-                   │    stream_chat()
-                   │    最终流式回答
-                   │
-                   ├─ citations.py
-                   │    校验回答里的 [文件名 p.N]
-                   │
-                   └─ conversation/service.py
-                        保存 assistant Message
-                        累加 task usage
-                        artifact/service.py 回填来源
-                   │
-                   ▼
-        ChatTurnEvent（start / thinking / delta / tool_call /
-                       tool_result / done / error）
-                   │
-                   ▼
-        api/v1/chat.py: _sse_events()
-                   │
-                   ▼
-        SSE: event: delta / data: {...}
-                   │
-                   ▼
-        useChatStream.ts → ChatPanel.vue 渲染
+```mermaid
+flowchart TD
+    U["用户 / 浏览器"] --> CHAT_UI["ChatPanel.vue"]
+    U --> OCR_UI["FilePreviewModal.vue"]
+    U --> EXEC_UI["TaskView / RunProgress"]
+    U --> FILE_UI["Library / Project 上传"]
+
+    subgraph ENTRY [入口API]
+        CHAT_UI -->|"POST /tasks/{id}/messages"| CHAT_API["api/v1/chat.py"]
+        OCR_UI -->|"POST /files/{id}/ocr"| OCR_API["api/v1/ocr.py"]
+        EXEC_UI -->|"POST /tasks/{id}/executions"| EXEC_API["api/v1/executions.py"]
+        FILE_UI -->|"POST /files"| FILE_API["api/v1/files.py"]
+    end
+
+    subgraph FILEPREP [文件准备]
+        FILE_API --> FILE["file/service.py<br/>上传 / 关联"]
+        FILE --> STORAGE["storage/<br/>文件字节"]
+        FILE --> FILEDB["PostgreSQL<br/>files / project_files"]
+    end
+
+    subgraph OCR [PDF页面准备-可选预处理]
+        OCR_API --> OCRJOB["ocr/service.py<br/>start_job()"]
+        OCRJOB --> INSPECT["document/pdf_router.py<br/>inspect_pdf()"]
+        INSPECT --> COVER["计算图片覆盖率"]
+        COVER --> OCRDB["PostgreSQL<br/>ocr_jobs"]
+        OCRJOB -.->|后台线程| RUN["ocr/service.py<br/>run_job()"]
+        RUN --> ROUTE{"每页 coverage &gt;= 70?<br/>pdf_router"}
+        ROUTE -->|text| NATIVE["PyMuPDF<br/>page.get_text()"]
+        ROUTE -->|ocr| VLM["PyMuPDF 渲染 PNG<br/>vlm_ocr.recognize_page()"]
+        NATIVE --> FP["PostgreSQL<br/>file_pages"]
+        VLM --> FP
+    end
+
+    subgraph CHAT [Chat一条消息]
+        CHAT_API --> TURN["conversation/chat_turn.py<br/>prepare_chat_turn()"]
+        TURN --> CTX["conversation/chat_context.py<br/>build_file_context_async()"]
+        CTX --> AVAIL["context/service.py<br/>compute_task_files()"]
+        AVAIL --> HASPAGES{"file_pages 存在？<br/>chat_context._read_text"}
+        HASPAGES -->|是| PAGES["ocr/service.py<br/>get_pages_text()"]
+        HASPAGES -->|否| BIG{"原文件 &gt; 10MB？<br/>chat_context._render_context"}
+        BIG -->|是| SKIP["标记 skipped<br/>提示 read_task_file"]
+        BIG -->|否| PARSE["document/service.py<br/>parsers.py → PyMuPDF"]
+        PAGES --> TEXT["文件文本"]
+        PARSE --> TEXT
+        SKIP --> PLAN["ChatTurnPlan"]
+        TEXT --> PROMPT["chat_prompts.py<br/>build_messages()"]
+        PROMPT --> PLAN
+        PLAN --> MODE{"mode == work？<br/>chat_turn"}
+        MODE -->|chat| STREAM["model/service.py<br/>stream_chat()"]
+        MODE -->|work| PREPASS["model/service.py<br/>complete_chat()<br/>工具 pre-pass（最多 4 轮）"]
+        PREPASS --> TOOLQ{"tool_calls 非空？<br/>chat_turn.run_chat_turn"}
+        TOOLQ -->|是| TOOLRUN["conversation/tools.py<br/>execute_tool()"]
+        TOOLRUN -.-> ARTIFACT
+        TOOLRUN -.-> EXEC_TOOL
+        TOOLRUN --> PREPASS
+        TOOLQ -->|否| STREAM
+        STREAM --> CITE["citations.py<br/>extract_citations()"]
+        CITE --> SAVE["conversation/service.py<br/>保存 assistant Message"]
+        SAVE --> SSE["ChatTurnEvent → SSE"]
+        SSE --> CHAT_UI
+    end
+
+    subgraph EXECUTION [Execution-可选分析]
+        EXEC_API --> EXEC["execution/service.py<br/>create_execution()"]
+        EXEC --> SCHED["execution/scheduler.py<br/>入队"]
+        SCHED --> PIPE["execution/pipeline.py<br/>resolve → parse → context → model → artifact"]
+        PIPE --> ARTIFACT
+        PIPE --> EXECSSE["SSE 进度"]
+        EXECSSE --> EXEC_UI
+    end
+
+    subgraph OPTIONAL [可选支撑模块]
+        ARTIFACT["artifact/service.py<br/>成果（可选）"]
+        EXEC_TOOL["execution/service.py<br/>启动执行（可选）"]
+        SKILL["skill/service.py<br/>Skill 资料（可选）"]
+        PROVIDER["providers / model config<br/>（支撑）"]
+        STATS["stats/service.py<br/>（非核心）"]
+        CLI["scripts/ocr_pdf.py<br/>→ document/ocr_service.py<br/>（CLI/测试，不写 file_pages）"]
+    end
+
+    SKILL -.-> CTX
+    PROVIDER -.-> STREAM
+    CLI -.-> INSPECT
+    FP -.->|已生成页文本| HASPAGES
+
+    classDef decision fill:#fff7ed,stroke:#f59e0b,color:#92400e;
+    classDef optional fill:#f9fafb,stroke:#9ca3af,stroke-dasharray:5,color:#4b5563;
+    class HASPAGES,BIG,MODE,TOOLQ,ROUTE decision;
+    class SKILL,PROVIDER,STATS,ARTIFACT,EXEC_TOOL,EXEC,OCR_UI,CLI optional;
 ```
 
-#### 5.0.2 各层文件负责什么
+图例：
 
-| 文件 | 角色 | 一句话 |
+- 实线：主路径；
+- 虚线：可选/支线；
+- 橙色菱形：判断点，节点内标注了判断所在文件/函数；
+- 灰色虚线边框：非必要/支撑模块。
+
+分支判断点：
+
+| 判断 | 判断位置 | 分支 |
 |---|---|---|
-| `frontend/src/components/ChatPanel.vue` | 前端页面 | 收集输入、展示流式回答 |
-| `frontend/src/api/chat.ts` | 前端协议 | 发 POST、解析 SSE |
-| `backend/app/api/v1/chat.py` | HTTP 入口 | 校验参数、返回 SSE |
-| `backend/app/modules/conversation/chat_turn.py` | Chat 主干 | 准备一轮请求并驱动模型/工具/保存 |
-| `backend/app/modules/conversation/chat_prompts.py` | Prompt | 组装 system 提示和历史消息 |
-| `backend/app/modules/conversation/chat_context.py` | 文件上下文 | 选文件、解析、预算截断、citation 来源 |
-| `backend/app/modules/conversation/tools.py` | 工具层 | 受控工具 allowlist 和执行入口 |
-| `backend/app/modules/model/service.py` | 模型层 | 解析 provider、流式/非流式调用 |
-| `backend/app/modules/context/service.py` | 上下文规则 | 计算 Task 可用文件 |
-| `backend/app/modules/ocr/service.py` | 页文本 | 读取 `file_pages` |
-| `backend/app/modules/document/parsers.py` | 解析器 | PDF 用 PyMuPDF，文本用解码器 |
-| `backend/app/modules/artifact/service.py` | 成果 | 保存成果、回填来源 |
-| `backend/app/modules/conversation/service.py` | 会话数据 | 消息、历史、usage |
-| 各模块 `repository.py` | 数据访问 | 拼 SQL、读写数据库 |
-| 各模块 `models.py` | 表结构 | SQLAlchemy 表定义 |
+| `file_pages` 是否存在 | `chat_context._read_text()` | 有 → 读页文本；无 → 判断原文大小 |
+| 原文件是否 >10MB | `chat_context._render_context()` | 是 → 标记 skipped；否 → 解析原文 |
+| `mode` 是否为 `work` | `chat_turn.prepare_chat_turn()` | chat → 直接流式回答；work → 工具 pre-pass |
+| `tool_calls` 是否非空 | `chat_turn.run_chat_turn()` | 是 → 执行工具并回灌，最多 4 轮；否 → 最终流式回答 |
+| PDF 每页 `coverage` 是否 ≥70 | `pdf_router.inspect_pdf()` | 是 → VLM OCR；否 → PyMuPDF 文本层 |
 
-#### 5.0.3 数据形态怎么变化
+从哪开始：
+
+- Chat：`ChatPanel` → `POST /tasks/{id}/messages`；
+- PDF：`FilePreviewModal` → `POST /files/{id}/ocr`；
+- Execution：`TaskView` → `POST /tasks/{id}/executions`；
+- 文件：`Library/Project` → `POST /files`。
+
+PDF 的 `file_pages` 是一个前置结果：OCR 任务生成后，Chat 只负责读取；没有页文本时才回退到原文解析。
+
+#### 5.1.2 各层文件负责什么
+
+```text
+前端
+├── ChatPanel.vue                 收集输入、展示流式回答
+└── api/chat.ts                   发 POST、解析 SSE
+
+后端入口
+└── api/v1/chat.py                校验参数、返回 SSE
+
+Chat 主干
+├── conversation/chat_turn.py     准备请求并驱动模型/工具/保存
+├── conversation/chat_prompts.py  system 提示 + 历史消息
+├── conversation/chat_context.py  文件上下文、预算、citation 来源
+├── conversation/tools.py         受控工具 allowlist / 执行入口
+├── conversation/citations.py     [文件名 p.N] 提取与校验
+└── conversation/service.py       消息、历史、usage
+
+模型与上下文
+├── model/service.py              provider 解析、流式/非流式调用
+├── context/service.py            Task 可用文件
+├── ocr/service.py                读取 file_pages
+└── document/parsers.py           PDF 用 PyMuPDF，文本用解码器
+
+成果与数据
+├── artifact/service.py           保存成果、回填来源
+├── */repository.py               拼 SQL、读写数据库
+└── */models.py                   SQLAlchemy 表定义
+```
+
+#### 5.1.3 数据形态怎么变化
 
 ```text
 HTTP JSON
@@ -427,62 +503,15 @@ SSE 文本帧
 Message + metadata 落库
 ```
 
-#### 5.0.4 主干和支线
 
-```text
-主干：
-chat.py → chat_turn.py → model/service.py
-
-文件支线：
-chat_turn.py → chat_context.py → ocr/document
-
-工具支线：
-chat_turn.py → tools.py → artifact/execution/context
-
-数据支线：
-各 service.py → repository.py → models.py → PostgreSQL
-```
-
-**如果只想读三个文件：**
-
-1. `backend/app/api/v1/chat.py`：看 HTTP 怎么进、SSE 怎么出；
-2. `backend/app/modules/conversation/chat_turn.py`：看一轮消息的主流程；
-3. `backend/app/modules/conversation/chat_context.py`：看文件怎么被自动读进上下文。
-
-#### 5.0.5 一个容易混淆的点
-
-```text
-PyMuPDF 不是模型工具。
-它在 chat_context.py → document/parsers.py 里自动执行。
-工具链只显示模型主动调用的 read_task_file 等；
-自动注入的文件上下文不会出现在工具列表里。
-```
-
-### 5.1 Chat（SSE + 受控工具）
-
-```text
-ChatPanel
-→ useChatStream
-→ api/chat.ts
-→ POST /tasks/{id}/messages
-→ api/v1/chat.py（HTTP/SSE 适配）
-→ conversation.chat_turn（一轮编排）
-→ conversation service（历史边界、Skill/文件上下文）
-→ work 模式：工具 pre-pass
-   → read_task_files / read_task_file / save_artifact / create_execution
-→ model stream → 结构化事件
-→ chat.py 转 SSE delta
-→ Message + metadata 落库
-→ done（usage / artifacts / executions）
-```
-
-关键点：
+### 5.2 Chat：行为约束
 
 - 对话模式无工具；工作模式工具由模型决定。
 - 历史只取 `context_start_sequence` 之后、最近 `CHAT_HISTORY_LIMIT` 条。
 - 工具失败显式回传，不伪装成功。
+- 自动文件上下文与工具读取是两条路径：前者由 `chat_context.py` 处理，后者由模型主动调用 `read_task_file`。
 
-### 5.2 Execution（确定性 Pipeline）
+### 5.3 Execution（确定性 Pipeline）
 
 ```text
 TaskView / RunProgress
@@ -496,7 +525,7 @@ TaskView / RunProgress
 依赖模块：`context`、`document`、`file`、`model`、`artifact`、`skill`、`task`。  
 Execution 状态只由 `execution/service.py` 修改，SSE 只做进度通知。
 
-### 5.3 文件 / 项目 / OCR
+### 5.4 文件 / 项目 / OCR
 
 ```text
 LibraryView / ProjectDetail / FilePreviewModal
@@ -516,7 +545,7 @@ PDF 页准备：
 → GET /files/{id}/content 优先返回页文本
 ```
 
-### 5.4 Artifact / Skill / Library
+### 5.5 Artifact / Skill / Library
 
 ```text
 TaskArtifacts
